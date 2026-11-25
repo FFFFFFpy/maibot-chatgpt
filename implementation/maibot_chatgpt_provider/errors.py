@@ -18,6 +18,7 @@ MESSAGES = {
     "usage_paused": "请检查 https://chatgpt.com/settings/usage 后执行 resume。",
     "unsupported_input": "仅支持 schema 1 的纯文本与助手拒答。",
     "unsupported_request": "上游不支持所请求的能力。",
+    "probe_failed": "模型未按要求返回有效的 MaiBot 测试工具报告；不能判为测试通过。",
     "route_mismatch": "请检查官方端点、方法与宿主配置。",
     "stream_failed": "未收到有效完整回复，部分文本已丢弃。",
     "storage_failed": "检查存储、权限及文件格式；若续期写入失败须重新 login。",

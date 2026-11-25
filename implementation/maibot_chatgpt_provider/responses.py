@@ -5,6 +5,7 @@ import re
 
 from .errors import Error, classify
 from .oauth import text
+from .model_probe import report_item
 
 
 def check(condition):
@@ -12,7 +13,7 @@ def check(condition):
         raise Error("stream_failed")
 
 
-def completed(r):
+def completed(r, probe_image=None):
     check(
         isinstance(r, dict)
         and r.get("status") == "completed"
@@ -21,8 +22,14 @@ def completed(r):
     )
     check(isinstance(r.get("output"), list))
     items = []
+    reported = False
     for message in r["output"]:
         check(isinstance(message, dict))
+        if probe_image is not None and message.get("type") == "function_call":
+            check(not reported)
+            items.append(report_item(message, probe_image))
+            reported = True
+            continue
         if message.get("type") == "reasoning":
             continue
         check(
@@ -49,6 +56,8 @@ def completed(r):
         if message.get("phase") in ("commentary", "final_answer"):
             item["phase"] = message["phase"]
         items.append(item)
+    if probe_image is not None and not reported:
+        raise Error("probe_failed")
     check(items)
     result = dict(item_schema_version=1, output_items=items, status="completed")
     if text(r.get("id")):
@@ -117,7 +126,7 @@ async def events(response, limit):
             data.append(value)
 
 
-async def consume(response, limit):
+async def consume(response, limit, probe_image=None):
     async for event, payload in events(response, limit):
         if payload == "[DONE]":
             break
@@ -126,7 +135,7 @@ async def consume(response, limit):
         typ = data.get("type")
         check(isinstance(typ, str) and (not event or event == typ))
         if typ == "response.completed":
-            return completed(data.get("response"))
+            return completed(data.get("response"), probe_image)
         if typ in ("response.failed", "error"):
             raise classify(
                 200, data.get("response", data), response.headers, stream=True
@@ -136,6 +145,10 @@ async def consume(response, limit):
         if typ in ("response.output_item.added", "response.output_item.done"):
             item = data.get("item")
             check(
-                isinstance(item, dict) and item.get("type") in ("message", "reasoning")
+                isinstance(item, dict)
+                and (
+                    item.get("type") in ("message", "reasoning")
+                    or (probe_image is not None and item.get("type") == "function_call")
+                )
             )
     raise Error("stream_failed")

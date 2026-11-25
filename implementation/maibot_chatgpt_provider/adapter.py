@@ -1,6 +1,7 @@
 import logging
 from uuid import uuid4
 from .errors import Error
+from .model_probe import diagnostic_definition, image_part
 from .oauth import RESOURCE, text
 
 _ROLES = {
@@ -25,15 +26,13 @@ def adapt(operation, r):
     )
     require(type(r.get("item_schema_version")) is int and r["item_schema_version"] == 1)
     require(
-        "message_list" not in r
-        and r.get("tool_options") in (None, [])
-        and r.get("tool_choice") is None
-        and not r.get("tools")
+        "message_list" not in r and r.get("tool_choice") is None and not r.get("tools")
     )
     require(
         r.get("response_format")
         in (None, {}, {"format_type": "text"}, {"type": "text"})
     )
+    probe = diagnostic_definition(r.get("tool_options"))
     info = r.get("model_info")
     require(
         isinstance(info, dict)
@@ -80,6 +79,8 @@ def adapt(operation, r):
                     if role != "assistant"
                     else dict(type="output_text", text=p["text"], annotations=[])
                 )
+            elif probe and role == "user" and p.get("type") == "image":
+                part = image_part(p)
             elif (
                 role == "assistant"
                 and set(p) == {"type", "refusal"}
@@ -91,9 +92,12 @@ def adapt(operation, r):
                 raise Error("unsupported_input")
             msg["content"].append(part)
         messages.append(msg)
-    return dict(
+    body = dict(
         model=info["model_identifier"], input=messages, stream=True, store=False
     )
+    if probe:
+        body["tools"] = [probe]
+    return body
 
 
 def smoke_request(slug, prompt):

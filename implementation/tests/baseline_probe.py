@@ -81,6 +81,113 @@ def probe(host):
     request.context_items.append(restored.output_items[0])
     next_snap = serialize_response_request_snapshot(request)
     assert adapt("response", next_snap)["input"][1]["content"][0]["type"] == "refusal"
+    # Execute the native row-test builders without starting its router/services.
+    import ast, asyncio
+    from typing import Any, Dict, List
+    from src.llm_models.payload_content.context_item import ContextItemBuilder
+    from src.llm_models.payload_content.tool_option import normalize_tool_options
+    from tests.test_native_probe import function_item
+    from tests.test_provider import sse, ev, response
+    from tests.support import engine
+
+    path = host / "src/webui/routers/model.py"
+    root = ast.parse(path.read_text(encoding="utf-8"))
+    keep = {
+        "_build_model_test_prompt",
+        "_build_model_test_tools",
+        "_build_model_test_context_factory",
+        "_serialize_model_test_tool_calls",
+        "_build_model_test_response",
+    }
+    nodes = [
+        n
+        for n in root.body
+        if (isinstance(n, ast.FunctionDef) and n.name in keep)
+        or (
+            isinstance(n, ast.Assign)
+            and getattr(n.targets[0], "id", "")
+            in {"MODEL_TEST_IMAGE_BASE64", "MODEL_TEST_TOOL_NAME"}
+        )
+    ]
+    ns = dict(
+        ContextItemBuilder=ContextItemBuilder,
+        Any=Any,
+        Dict=Dict,
+        List=List,
+        ModelTestToolCall=SimpleNamespace,
+        ModelTestResponse=SimpleNamespace,
+    )
+    import __future__
+
+    exec(
+        compile(
+            ast.Module(body=nodes, type_ignores=[]),
+            str(path),
+            "exec",
+            flags=__future__.annotations.compiler_flag,
+        ),
+        ns,
+    )
+    for visual in (False, True):
+        client = SimpleNamespace(
+            get_support_image_formats=lambda: ["jpeg", "jpg", "png", "webp"]
+        )
+        req = ResponseRequest(
+            model_info=model,
+            context_items=ns["_build_model_test_context_factory"](visual)(client),
+            tool_options=normalize_tool_options(ns["_build_model_test_tools"]()),
+            max_tokens=512,
+        )
+
+        def upstream(r):
+            body = json.loads(r.content)
+            assert (
+                body["model"] == model.model_identifier
+                and body["tools"][0]["name"] == ns["MODEL_TEST_TOOL_NAME"]
+            )
+            assert (
+                any(
+                    p["type"] == "input_image"
+                    for m in body["input"]
+                    for p in m["content"]
+                )
+                == visual
+            )
+            return sse(
+                ev(
+                    "response.completed",
+                    response=response(output=[function_item(visual)]),
+                )
+            )
+
+        async def dispatch_probe():
+            provider = engine(Path.cwd() / str(visual), upstream)
+            try:
+                return await provider.dispatch(
+                    "response", serialize_response_request_snapshot(req)
+                )
+            finally:
+                await provider.close()
+
+        result = asyncio.run(dispatch_probe())
+        native = PluginLLMClient._build_api_response(
+            result, "synthetic", "synthetic", require_output_items=True
+        )
+        projected = SimpleNamespace(
+            tool_calls=native.tool_calls,
+            response=native.content or "",
+            model_name="synthetic",
+            reasoning=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+        )
+        assert ns["_build_model_test_response"](
+            model_name="synthetic", visual_tested=visual, latency_ms=1, result=projected
+        ).success
+    print(
+        "native row-test builders, plugin dispatch, synthetic upstream and Host success predicate: PASS (with/without image)"
+    )
     manifest = json.loads((ROOT / "_manifest.json").read_bytes())
     PluginManifest.model_validate(manifest)
     print("synthetic source codec roundtrip and strict manifest schema: PASS")

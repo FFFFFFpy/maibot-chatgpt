@@ -108,7 +108,18 @@ class Provider:
                         != "text/event-stream"
                     ):
                         raise Error("stream_failed")
-                    return await consume(r, self.cfg.max_buffered_text_bytes)
+                    probe_image = (
+                        any(
+                            part["type"] == "input_image"
+                            for msg in body["input"]
+                            for part in msg["content"]
+                        )
+                        if body.get("tools")
+                        else None
+                    )
+                    return await consume(
+                        r, self.cfg.max_buffered_text_bytes, probe_image
+                    )
         except (
             httpx.HTTPError,
             ValueError,
