@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "subscription_sharing_usage_limit_exceeded",
+    "type": "synthetic_error",
+    "message": "Synthetic quota fixture; not a real account result",
+    "param": null
+  }
+}

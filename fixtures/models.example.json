@@ -1,0 +1,19 @@
+{
+  "models": [
+    {
+      "slug": "fixture-chat-model",
+      "display_name": "Synthetic Text Model",
+      "visibility": "list"
+    },
+    {
+      "slug": "fixture-hidden-model",
+      "display_name": "Hidden Fixture",
+      "visibility": "hidden"
+    },
+    {
+      "slug": "fixture-second-model",
+      "display_name": "Synthetic Second Model",
+      "visibility": "list"
+    }
+  ]
+}

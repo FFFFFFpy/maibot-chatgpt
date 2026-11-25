@@ -1,0 +1,21 @@
+{
+  "item_schema_version": 1,
+  "output_items": [
+    {
+      "item_type": "AssistantMessageItem",
+      "parts": [
+        {
+          "type": "text",
+          "text": "你好！"
+        }
+      ]
+    }
+  ],
+  "response_id": "resp_synthetic_text",
+  "status": "completed",
+  "usage": {
+    "prompt_tokens": 11,
+    "completion_tokens": 4,
+    "total_tokens": 15
+  }
+}

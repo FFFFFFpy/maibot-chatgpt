@@ -1,0 +1,3 @@
+event: response.completed
+data: {"type":"response.completed","sequence_number":0,"response":{"id":"resp_synthetic_refusal","status":"completed","model":"fixture-chat-model","output":[{"type":"message","id":"msg_synthetic_refusal","role":"assistant","status":"completed","content":[{"type":"refusal","refusal":"抱歉，无法提供该内容。"}]}]}}
+

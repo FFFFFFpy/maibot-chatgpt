@@ -1,0 +1,197 @@
+{
+  "taskpack_version": "1.1.0",
+  "target_plugin_version": "0.1.0",
+  "created_on": "2026-11-25",
+  "timezone": "Asia/Shanghai",
+  "deliverable_kind": "implementation_task_pack_not_implemented_plugin",
+  "planned_tasks": 14,
+  "planned_tests": 37,
+  "plugin_tests_executed": false,
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "size_bytes": 2198,
+      "sha256": "e63dffb1ab272fb6a240fa8a19df6471bb4f4efc868e1cdeecdea2038bb72f07"
+    },
+    {
+      "path": "MASTER_TASK.md",
+      "size_bytes": 5253,
+      "sha256": "a64cd8092bdf5df390a7824ac3d0a555f40ea4379f6509d169be0414c3685b4e"
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 4123,
+      "sha256": "e0210a9e0185f5d29f27152fe6cbea45107034755f499b6ef29f9ecaf662aade"
+    },
+    {
+      "path": "START_HERE.md",
+      "size_bytes": 3006,
+      "sha256": "f3e6c5bbf91880d8bcc941cb5a7d67045e10e677d59a95c64fc15ef1ac11e3eb"
+    },
+    {
+      "path": "acceptance/REPORT_TEMPLATE.md",
+      "size_bytes": 2622,
+      "sha256": "f4b42163e17fb09ced349277327a9210967587c0e780674c916d966414a0e0b7"
+    },
+    {
+      "path": "acceptance/test-matrix.csv",
+      "size_bytes": 10600,
+      "sha256": "4ed8f16d14d06879cc0aea42abf22bb90d948d3e59644c134b71aa3fb4fa608d"
+    },
+    {
+      "path": "docs/00-scope.md",
+      "size_bytes": 1851,
+      "sha256": "d5ffe43d40d2ca5952a2f0a8fabc1c6d681058c63957fec9566e45406324f400"
+    },
+    {
+      "path": "docs/10-architecture.md",
+      "size_bytes": 3942,
+      "sha256": "061da1561b8b18621cbf968628100255c5ee4ba845904a27f579231c180e5036"
+    },
+    {
+      "path": "docs/20-maibot-contract.md",
+      "size_bytes": 16212,
+      "sha256": "ee64585f84829d8f99f6a6efcc204c85b9713c7b11a3119ae38f208372f69ab0"
+    },
+    {
+      "path": "docs/30-openai-contract.md",
+      "size_bytes": 7682,
+      "sha256": "d20c7b985427b7ee8d469ecf9f391f6e559540be72cc7e7930535e26c13277c0"
+    },
+    {
+      "path": "docs/40-credentials-and-concurrency.md",
+      "size_bytes": 4956,
+      "sha256": "a956beaec4fc9ad24a6ce5858bffcf30295d130f3bc78eceb80c31c670e3bdcd"
+    },
+    {
+      "path": "docs/45-errors-and-retries.md",
+      "size_bytes": 3618,
+      "sha256": "af9ca0258eb75a1fac3348dad730f7886468d52a14aeb46a6848732c17fcc26b"
+    },
+    {
+      "path": "docs/50-test-plan.md",
+      "size_bytes": 2687,
+      "sha256": "a1f764a84f146e3b49c89f004a266c9cd1557d0733a55d01189b77f344a00da2"
+    },
+    {
+      "path": "docs/60-docker-runbook.md",
+      "size_bytes": 3243,
+      "sha256": "0a47c7c1a4c4b22c0e5bb9b8b4fa04cd31b36a1559d1a467965bd25e482f8559"
+    },
+    {
+      "path": "docs/70-release-and-handoff.md",
+      "size_bytes": 3249,
+      "sha256": "4469cf9a84275f911664c228f54b2a4e16895fe631d4a81732de74987ec3692e"
+    },
+    {
+      "path": "docs/80-future-roadmap.md",
+      "size_bytes": 1216,
+      "sha256": "7e5bf7980b42c576e26043c682d994072c2a1fa960e85fc566845a0ae2832f0b"
+    },
+    {
+      "path": "examples/README.md",
+      "size_bytes": 591,
+      "sha256": "beb5d48ffaa2154ae43b2cd942535102bb6e93d5efae4c1b2bae1ffae98d8693"
+    },
+    {
+      "path": "examples/credentials.schema.example.json",
+      "size_bytes": 1197,
+      "sha256": "e3116130218ac03027ce2c2de490d03c644a961cdd3d9d63a9a5a397018f69c2"
+    },
+    {
+      "path": "examples/model_catalog.fragment.toml",
+      "size_bytes": 845,
+      "sha256": "b01cea887eca9021f317cf7e96f2b307753fc8684899497498717dc4829e652d"
+    },
+    {
+      "path": "examples/plugin-config.target.toml",
+      "size_bytes": 850,
+      "sha256": "54d6f02e8a39f52e62a767b6ec4c8e9be31492dbaf7bbcfc882199da54e97a10"
+    },
+    {
+      "path": "fixtures/README.md",
+      "size_bytes": 1913,
+      "sha256": "5a76e5994f97b8b2c353c7405dda95833e93fde0828f7bddda5f774e3b9463f4"
+    },
+    {
+      "path": "fixtures/admission/permission_detail.json",
+      "size_bytes": 83,
+      "sha256": "95a60458a0e0de623b38405ce503a71446449e687dafaf2a71bbe236dd260cc9"
+    },
+    {
+      "path": "fixtures/admission/usage_limit.json",
+      "size_bytes": 196,
+      "sha256": "596c646d549dff90efa6f57583cc84544cf2c56a61cb74e61c9daa83b37cdaf3"
+    },
+    {
+      "path": "fixtures/maibot/context-items-v1.request.json",
+      "size_bytes": 1293,
+      "sha256": "58365218afeeb7efda17823f5e5ce7f8fa078d9c7ad20bf98c06195921b4f41f"
+    },
+    {
+      "path": "fixtures/maibot/context-items-v1.response.json",
+      "size_bytes": 371,
+      "sha256": "7a3cf7c111c65bf8aa5e6c6c81a596197601974b882e44c8f2ed1260d117da73"
+    },
+    {
+      "path": "fixtures/maibot/refusal-v1.response.json",
+      "size_bytes": 310,
+      "sha256": "eb790054897e9fe0f022225e6515b9c0c569391dde7b63e82fe92116dde40d3c"
+    },
+    {
+      "path": "fixtures/models.example.json",
+      "size_bytes": 389,
+      "sha256": "78840450e25af9fd22b0e1769a928018cd6dc8157bbd4ced7f0b8cf9460faddb"
+    },
+    {
+      "path": "fixtures/responses/incomplete.sse",
+      "size_bytes": 388,
+      "sha256": "5c9b8f7baaee09fd6776e05ab5fb627507e23def88d4c840d6bfe13f4d706484"
+    },
+    {
+      "path": "fixtures/responses/interrupted.sse",
+      "size_bytes": 180,
+      "sha256": "908287eb7891b64621ec5e682f35f1cf57ce8dbe675d661bd707a56dfff33502"
+    },
+    {
+      "path": "fixtures/responses/partial_failed.sse",
+      "size_bytes": 414,
+      "sha256": "c37ea13febbdfba513bb924b7c1d310760227ab4181d82b0e04cae6dbd513bee"
+    },
+    {
+      "path": "fixtures/responses/refusal_completed.sse",
+      "size_bytes": 352,
+      "sha256": "1f69bd3c3c58fa3bd85328cbde2ee300eca2cfce9f807b43bc799da6d88b987e"
+    },
+    {
+      "path": "fixtures/responses/text_completed.sse",
+      "size_bytes": 599,
+      "sha256": "76dde247e5fdf3717b38f0b8069124d24c2f982f991d1063aa29a8b181c1e06b"
+    },
+    {
+      "path": "references/SOURCES.md",
+      "size_bytes": 6632,
+      "sha256": "6d8c5119ca90211468934e35dacd3ddc3269f0aba42f1597c836d10fd3ee83c4"
+    },
+    {
+      "path": "references/compatibility-baseline.json",
+      "size_bytes": 1510,
+      "sha256": "69d1cb8c1c25a6e3c947698764aa41f73e9e2e09b4933f310b8f954dd7676f28"
+    },
+    {
+      "path": "tasks/BACKLOG.md",
+      "size_bytes": 1517,
+      "sha256": "a8b25e67857d400fe4ee4913eec5483f0d82f7e56213e5586ffcec52a2f99a04"
+    },
+    {
+      "path": "tasks/backlog.json",
+      "size_bytes": 9414,
+      "sha256": "fd3dbc1cca002d54216bfbe7653e87163416e5f3a034ec362a5226e2a2bcdac7"
+    },
+    {
+      "path": "tools/check_taskpack.py",
+      "size_bytes": 6766,
+      "sha256": "ec7cc59bad7cbfc935a7cf53c0f18003d71c809af391edc293698d7af2ccc8f2"
+    }
+  ]
+}

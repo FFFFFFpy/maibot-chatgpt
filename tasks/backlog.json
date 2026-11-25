@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "target": "plugin-v0.1.0-P0",
+  "all_statuses_are_initial": true,
+  "tasks": [
+    {
+      "id": "T00",
+      "title": "契约和目标环境核验",
+      "depends_on": [],
+      "gate": "G0",
+      "status": "todo",
+      "outputs": [
+        "docs/compatibility-report.md",
+        "真实/合成请求夹具及来源标记"
+      ],
+      "acceptance": [
+        "记录 Host/SDK/Python/镜像证据，未知项填未验证",
+        "确认 input/output Item、RPC 错误、ctx.paths、依赖与 Host 重试语义",
+        "记录官方 SIWC 与许可证差异"
+      ],
+      "execution_note": "无目标环境时完成固定源码基线核验并继续核心开发，目标部署部分标为 blocked"
+    },
+    {
+      "id": "T01",
+      "title": "建立独立插件工程",
+      "depends_on": [
+        "T00"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "implementation/plugin.py",
+        "implementation/_manifest.json",
+        "implementation/maibot_chatgpt_provider/",
+        "pyproject.toml"
+      ],
+      "acceptance": [
+        "真实 SDK 导入和生命周期通过",
+        "使用唯一顶层包名避免冲突；manifest 与 decorator 一致",
+        "Python 依赖在 manifest 与开发环境一致，无 WebUI/Node"
+      ],
+      "execution_note": "依赖版本按目标共享环境选择，不自动升级宿主依赖"
+    },
+    {
+      "id": "T02",
+      "title": "凭据库、稳定身份与原子持久化",
+      "depends_on": [
+        "T01"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/auth/credentials.py"
+      ],
+      "acceptance": [
+        "对齐 examples/credentials.schema.example.json",
+        "同目录临时文件+fsync+os.replace+0600，未知 schema/损坏 JSON 明确报错",
+        "单目录固定 registration，revision 与 session_generation 语义清晰"
+      ],
+      "execution_note": "不做 symlink 攻击检测或四阶段磁盘故障注入；凭据不得落源码或 runtime_dir"
+    },
+    {
+      "id": "T03",
+      "title": "官方 OAuth 与 OIDC 登录",
+      "depends_on": [
+        "T02"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/auth/oauth.py",
+        "OAuth 负向测试"
+      ],
+      "acceptance": [
+        "state/nonce/PKCE/127.0.0.1 loopback/issued-client 严格校验",
+        "缓存 JWKS 并完成 JWT 验签与 direct scope 检查",
+        "失败登录不覆盖有效旧会话，晚提交报 stale_attempt"
+      ],
+      "execution_note": "不做 pending_registration 持久化；真实浏览器登录留给 G3"
+    },
+    {
+      "id": "T04",
+      "title": "双层锁续期与导入/登出事务",
+      "depends_on": [
+        "T03"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/auth/token_manager.py",
+        "真实双进程锁测试"
+      ],
+      "acceptance": [
+        "同工作线程完成持锁—重读—刷新—验签—原子写，等待者重读",
+        "调用取消不丢新 token；响应中断标 refresh_uncertain 停盲重试",
+        "import-credentials 与 logout 共用锁并正确递增 session_generation"
+      ],
+      "execution_note": "不做 pending_refresh 历史回溯检查点；不可用线程 mock 替代多进程测试"
+    },
+    {
+      "id": "T05",
+      "title": "Host 文本与 Responses 适配",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/provider/maibot_adapter.py",
+        "maibot_chatgpt_provider/provider/responses_adapter.py"
+      ],
+      "acceptance": [
+        "支持已验证 context_items 版本，未知 schema 拒绝",
+        "system→developer（不发顶层 instructions），多轮文本与 refusal 符合官方 content item 类型",
+        "拒绝工具/图片/结构化约束/非空未知 extra_params；temperature/max_tokens 忽略并脱敏提示"
+      ],
+      "execution_note": "message_list 仅在 G0 目标证据支持时增加窄兼容分支"
+    },
+    {
+      "id": "T06",
+      "title": "Responses SSE 终态消费",
+      "depends_on": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/provider/chatgpt_provider.py",
+        "SSE 状态机与 HTTP mock"
+      ],
+      "acceptance": [
+        "固定官方 endpoint、store=false/stream=true、SDK max_retries=0",
+        "仅 response.completed 成功，不重拼文本，拒答正确返回且不泄露 reasoning",
+        "非完成终态/超缓冲/超时/取消丢弃半成品并释放连接"
+      ],
+      "execution_note": "使用锁定 SDK 补全 mock HTTP 响应，覆盖 UTF-8 跨块与多行 data"
+    },
+    {
+      "id": "T07",
+      "title": "错误分类、暂停与脱敏边界",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "maibot_chatgpt_provider/provider/errors.py"
+      ],
+      "acceptance": [
+        "SSE 内错误码优先分类；额度超限持久化暂停至人工 resume",
+        "边界重建脱敏异常，抑制底层秘密异常链",
+        "总重试预算与 Retry-After 正确；绝不调用 ctx.llm.generate"
+      ],
+      "execution_note": "失败必须抛异常交 Host，禁止返回伪成功文本或字典"
+    },
+    {
+      "id": "T08",
+      "title": "统一 CLI 与配置片段输出",
+      "depends_on": [
+        "T03",
+        "T04",
+        "T05",
+        "T06",
+        "T07"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "implementation/scripts/login.py",
+        "子命令帮助与跨平台示例"
+      ],
+      "acceptance": [
+        "实现 init-host/login/status/doctor/models/config/smoke/import-credentials/resume/logout",
+        "显式 --data-dir；config 输出可解析 TOML 到 stdout 且不改宿主文件",
+        "退出码、权限校验与错误脱敏通过验证"
+      ],
+      "execution_note": "最薄 CLI，不新增 WebUI"
+    },
+    {
+      "id": "T09",
+      "title": "MaiBot Provider 接线与生命周期",
+      "depends_on": [
+        "T04",
+        "T05",
+        "T06",
+        "T07"
+      ],
+      "gate": "G2",
+      "status": "todo",
+      "outputs": [
+        "完整 implementation/plugin.py"
+      ],
+      "acceptance": [
+        "manifest 注册与 operation=response 完整流转",
+        "返回目标 Host 可反序列化的 output_items",
+        "未登录时可加载并报 auth_required；on_unload 安全收尾"
+      ],
+      "execution_note": "不导入 Host 私有 src；无真实 Host 环境时仍须完成 plugin.py 接线与 SDK 级单测，仅真实 Runner 加载留给 T11"
+    },
+    {
+      "id": "T10",
+      "title": "离线测试与安全回归收口",
+      "depends_on": [
+        "T02",
+        "T03",
+        "T04",
+        "T05",
+        "T06",
+        "T07",
+        "T08"
+      ],
+      "gate": "G1",
+      "status": "todo",
+      "outputs": [
+        "implementation/tests/",
+        "离线测试记录"
+      ],
+      "acceptance": [
+        "test-matrix 全部 25 条 G1 用例真实运行通过",
+        "真实双进程锁、取消、SSE 异常参数化与 canary 脱敏全通过",
+        "零网络与真实密钥依赖"
+      ],
+      "execution_note": "测试随功能编写，本任务负责完整回归收口"
+    },
+    {
+      "id": "T11",
+      "title": "真实 Host 与 Docker 契约联调",
+      "depends_on": [
+        "T09",
+        "T10"
+      ],
+      "gate": "G2",
+      "status": "todo",
+      "outputs": [
+        "Host 集成测试",
+        "脱敏路径映射与准确 Docker 命令",
+        "G2 报告"
+      ],
+      "acceptance": [
+        "6 条 G2 用例通过（含拒答往返、任务列表回退与显式单模型对比）",
+        "验证宿主配置未被改写、热重载与超时预算"
+      ],
+      "execution_note": "目标环境不可达则记录 blocked，不以纯 mock 冒充 G2"
+    },
+    {
+      "id": "T12",
+      "title": "用户授权后的真实订阅验收",
+      "depends_on": [
+        "T08",
+        "T11"
+      ],
+      "gate": "G3",
+      "status": "todo",
+      "outputs": [
+        "脱敏 Live 报告"
+      ],
+      "acceptance": [
+        "用户本人 OAuth 与真实 models 返回",
+        "CLI 与 MaiBot 纯文本回复各完成一次",
+        "自然续期与容器重建持久化逐项记录"
+      ],
+      "execution_note": "不索要用户 token，不发真实群消息，不为测试耗尽额度"
+    },
+    {
+      "id": "T13",
+      "title": "打包、冷安装复核与交接",
+      "depends_on": [
+        "T11",
+        "T12"
+      ],
+      "gate": "release",
+      "status": "todo",
+      "outputs": [
+        "maibot-chatgpt-provider-v0.1.0.zip",
+        "README.md",
+        "docs/compatibility-report.md",
+        "docs/acceptance-report.md",
+        "THIRD_PARTY_NOTICES.md"
+      ],
+      "acceptance": [
+        "干净临时目录冷安装并校验哈希与零运行秘密",
+        "G0–G3 诚实逐项报告，未通过项不宣称正式验收"
+      ],
+      "execution_note": "G3 阻塞时可交付明确标记的开发预览 ZIP，T13 正式状态保持 blocked"
+    }
+  ]
+}

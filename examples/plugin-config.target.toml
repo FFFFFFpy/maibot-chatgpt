@@ -1,0 +1,24 @@
+# 设计目标，由实施者映射至目标 SDK 的 PluginConfigBase；运行时 data_dir 来自 ctx.paths。
+[request]
+connect_timeout_seconds = 10
+read_idle_timeout_seconds = 90
+# 插件内部需消费完整 SSE 直到 response.completed，默认 180s 以兼顾较慢的思考模型。
+total_timeout_seconds = 180
+max_concurrent_requests = 1
+max_buffered_text_bytes = 1048576
+pre_admission_retry_limit = 0
+
+[credentials]
+lock_timeout_seconds = 30
+# 单次刷新事务（含 token POST 与必要时 JWKS 刷新）的总 HTTP 超时，须小于 lock_timeout_seconds。
+oauth_http_timeout_seconds = 20
+expiry_safety_margin_seconds = 60
+
+[recovery]
+pause_on_usage_limit = true
+temporary_cooldown_seconds = 30
+
+[diagnostics]
+log_request_bodies = false
+log_credentials = false
+# 固定安全保护约束，生产配置不得允许开启 token 日志。

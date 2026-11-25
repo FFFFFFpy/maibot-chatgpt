@@ -1,0 +1,56 @@
+{
+  "item_schema_version": 1,
+  "context_items": [
+    {
+      "item_type": "SystemMessageItem",
+      "meta": {
+        "item_id": "synthetic-system",
+        "logical_turn_id": null,
+        "timestamp": "2026-11-25T00:00:00"
+      },
+      "parts": [
+        {
+          "type": "text",
+          "text": "请用中文简洁回答。"
+        }
+      ]
+    },
+    {
+      "item_type": "UserMessageItem",
+      "meta": {
+        "item_id": "synthetic-user",
+        "logical_turn_id": null,
+        "timestamp": "2026-11-25T00:00:00"
+      },
+      "parts": [
+        {
+          "type": "text",
+          "text": "请回复一句你好。"
+        }
+      ]
+    }
+  ],
+  "logical_turn_id": "synthetic-turn",
+  "model_info": {
+    "model_type": "llm",
+    "model_identifier": "fixture-chat-model",
+    "name": "chatgpt-text-fixture",
+    "api_provider": "chatgpt_subscription"
+  },
+  "api_provider": {
+    "name": "chatgpt_subscription",
+    "client_type": "maibot.chatgpt.subscription",
+    "base_url": "https://api.openai.com/v1",
+    "auth_type": "none",
+    "api_key": "",
+    "timeout": 120,
+    "max_retry": 1
+  },
+  "request_kind": "response",
+  "max_tokens": null,
+  "temperature": null,
+  "response_format": null,
+  "extra_params": {},
+  "tool_options": [],
+  "tool_choice": null
+}
