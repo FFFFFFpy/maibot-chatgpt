@@ -1,0 +1,7 @@
+# Git archive / GitHub release source: keep the installable plugin layout.
+/tests export-ignore
+/AGENTS.md export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
+/.python-version export-ignore
+/uv.lock export-ignore

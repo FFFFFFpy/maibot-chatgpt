@@ -1,0 +1,127 @@
+"""Cold ZIP-only preflight. Not MaiBot Host/Runner acceptance. No account used."""
+
+import argparse
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+
+def check(archive, host, source=False):
+    archive = archive.resolve()
+    host = host.resolve()
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONNOUSERSITE="1")
+    env.pop("PYTHONPATH", None)
+    with tempfile.TemporaryDirectory(prefix="siwc-cold-") as tmp:
+        root = Path(tmp)
+        plugin = root / "maibot_chatgpt_provider_plugin"
+        v = root / "env"
+        py = v / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        private = root / "private"
+        with zipfile.ZipFile(archive) as z:
+            if source:
+                dirs = {p.split("/")[0] for p in z.namelist()}
+                assert len(dirs) == 1
+                prefix = dirs.pop()
+                assert prefix.startswith("maibot-chatgpt-")
+                plugin = root / prefix
+                rel = {
+                    p[len(prefix) + 1 :] for p in z.namelist() if not p.endswith("/")
+                }
+                assert {
+                    "_manifest.json",
+                    "LICENSE",
+                    "THIRD_PARTY_NOTICES.md",
+                    "plugin.py",
+                    "webui.json",
+                    "web/connection.html",
+                    "_locales/zh-CN.json",
+                    "maibot_chatgpt_provider/provider.py",
+                } <= rel
+                assert not any(
+                    p in {"config.toml", "credentials.json", "host_identity.json"}
+                    or p.split("/")[0]
+                    in {
+                        "implementation",
+                        "artifacts",
+                        ".git",
+                        ".venv",
+                        "acceptance",
+                        "tasks",
+                    }
+                    or p.endswith((".zip", ".xml"))
+                    for p in rel
+                )
+            assert all(
+                p.startswith(plugin.name + "/") and ".." not in Path(p).parts
+                for p in z.namelist()
+            )
+            assert z.testzip() is None
+            z.extractall(root)
+            print("CRC and isolated unpack OK:", len(z.namelist()), "files", flush=True)
+
+        def run(*cmd, cwd=plugin, quiet=False):
+            subprocess.run(
+                cmd,
+                cwd=cwd,
+                env=env,
+                check=True,
+                stdout=subprocess.DEVNULL if quiet else None,
+            )
+
+        run("uv", "venv", "--python", sys.executable, str(v))
+        run("uv", "pip", "install", "--python", str(py), "-r", "requirements.txt")
+        run("uv", "pip", "check", "--python", str(py))
+        run(str(py), "scripts/login.py", "--help", quiet=True)
+        run(
+            str(py),
+            "scripts/login.py",
+            "--data-dir",
+            str(private),
+            "init-host",
+            quiet=True,
+        )
+        run(str(py), "scripts/login.py", "--data-dir", str(private), "status", "--json")
+        run(str(py), "scripts/login.py", "--data-dir", str(private), "doctor")
+        run(
+            str(py),
+            "-c",
+            "import importlib.util as u,sys;s=u.spec_from_file_location('cold_plugin','plugin.py',submodule_search_locations=['.']);m=u.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m);p=m.create_plugin();assert [v['client_type'] for v in p.get_llm_providers()]==['maibot.chatgpt.subscription'];print('isolated SDK factory OK')",
+        )
+        if not source:
+            run(
+                str(py),
+                "scripts/package_plugin.py",
+                "--preview",
+                "--output-dir",
+                str(root / "rebuild"),
+            )
+            rebuilt = root / "rebuild" / archive.name
+            assert (
+                hashlib.sha256(archive.read_bytes()).digest()
+                == hashlib.sha256(rebuilt.read_bytes()).digest()
+            )
+            print("byte-identical rebuild OK", flush=True)
+        # Validator is the actual checkout using the probe interpreter, NOT an artificial validator or cold venv dependency.
+        run(
+            sys.executable,
+            "-c",
+            "import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);from src.plugin_runtime.runner.manifest_validator import ManifestValidator;v=ManifestValidator(log_errors=False);assert v.load_from_plugin_path(Path(sys.argv[2]).parent) is not None,v.errors;print('cold strict plugin directory validator: PASS')",
+            str(host),
+            str(plugin / "_manifest.json"),
+            cwd=root,
+        )
+
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser()
+    p.add_argument("archive", type=Path)
+    p.add_argument("baseline_host", type=Path)
+    p.add_argument(
+        "--source", action="store_true", help="verify a GitHub-style Git source archive"
+    )
+    args = p.parse_args()
+    check(args.archive, args.baseline_host, args.source)

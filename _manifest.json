@@ -1,14 +1,15 @@
 {
   "manifest_version": 2,
-  "id": "local.maibot.chatgpt_subscription",
+  "id": "github.ffffffpy.chatgpt_subscription",
+  "plugin_type": "provider",
   "name": "MaiBot ChatGPT Subscription Provider",
   "description": "独立 SIWC 会话；文本、Planner 函数工具与视觉输入",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "author": {
     "name": "Helw",
     "url": "https://github.com/FFFFFFpy"
   },
-  "license": "All rights reserved",
+  "license": "MIT",
   "urls": {
     "repository": "https://github.com/FFFFFFpy/maibot-chatgpt"
   },
@@ -41,7 +42,7 @@
   "llm_providers": [
     {
       "client_type": "maibot.chatgpt.subscription",
-      "version": "0.4.3"
+      "version": "0.5.0"
     }
   ],
   "capabilities": [],

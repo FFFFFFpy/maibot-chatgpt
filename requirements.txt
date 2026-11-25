@@ -1,0 +1,6 @@
+# Runtime only. Development and transitive pins belong in uv.lock.
+maibot-plugin-sdk==2.23.0
+httpx>=0.28.1,<0.29
+PyJWT>=2.15.1,<3
+cryptography>=50.0.2,<51
+tomlkit>=0.13.3,<1

@@ -22,6 +22,7 @@ FILES = (
     "scripts/compare_planner_prefix.py",
     "scripts/package_plugin.py",
     "README.md",
+    "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     "docs/docker.md",
     "docs/compatibility-report.md",
@@ -66,11 +67,9 @@ def build(output, preview, author, repo):
     if bool(author) != bool(repo) or (preview and (author or repo)):
         raise ValueError("选择 --preview，或者同时提供真实作者主页与项目仓库 URL")
     output.mkdir(parents=True, exist_ok=True)
-    destination = output / (
-        "maibot-chatgpt-provider-v0.4.3-web-login" + ("-preview" if preview else "") + ".zip"
-    )
     entries = {name: (ROOT / name).read_bytes() for name in FILES}
     manifest = json.loads(entries["_manifest.json"])
+    destination = output / (f"maibot-chatgpt-provider-v{manifest['version']}-web-login" + ("-preview" if preview else "") + ".zip")
     if author and repo:
         manifest["author"]["url"] = actual(author)
         manifest["urls"]["repository"] = actual(repo)

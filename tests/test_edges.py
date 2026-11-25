@@ -153,7 +153,7 @@ def test_QA028_concurrent_cooldown(tmp_path):
     ],
 )
 def test_pack_sse(tmp_path, name):
-    fixtures = Path(__file__).resolve().parents[2] / "fixtures"
+    fixtures = Path(__file__).resolve().parent / "fixtures"
     raw = (fixtures / "responses" / (name + ".sse")).read_bytes()
     req = json.loads((fixtures / "maibot/context-items-v1.request.json").read_bytes())
     p = engine(tmp_path, lambda _: sse(raw))

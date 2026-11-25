@@ -12,7 +12,7 @@ docker inspect --format '{{range .Mounts}}{{println .Type .Source "->" .Destinat
 docker exec CONTAINER RUNNER_PYTHON -c 'import sys,importlib.metadata as m;print(sys.version.split()[0], m.version("maibot-plugin-sdk"))'
 ~~~
 
-记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/local.maibot.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。v0.1.3 起，若 Host 预建的插件专用 data_dir 是 Runner 所有且仅对其他用户开放读取/遍历（如 0755），插件在首次加锁时仅将该目录收紧到 0700；不会递归改权限、修改父目录、接管其他用户目录或改动 CLI 指定的路径。卷只读、UID/GID 不匹配或凭据文件损坏时，页面会给出相应提示。Windows 必须自己核验 DACL。插件按官方 HTTPS 目标选取 HTTPS_PROXY（或 ALL_PROXY），尊重 NO_PROXY；只有 HTTP_PROXY 不代表 HTTPS 流量也应走代理。显式加载 SSL_CERT_FILE / SSL_CERT_DIR，二者均未设置时可用 REQUESTS_CA_BUNDLE。请在实际 Runner 与 CLI 各自的环境设置可信代理和 CA，不要在聊天、日志或插件配置中填写代理密码。保持证书及主机名校验，不跟随重定向，不继承 OpenAI 账号相关环境头。
+记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/github.ffffffpy.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。v0.1.3 起，若 Host 预建的插件专用 data_dir 是 Runner 所有且仅对其他用户开放读取/遍历（如 0755），插件在首次加锁时仅将该目录收紧到 0700；不会递归改权限、修改父目录、接管其他用户目录或改动 CLI 指定的路径。卷只读、UID/GID 不匹配或凭据文件损坏时，页面会给出相应提示。Windows 必须自己核验 DACL。插件按官方 HTTPS 目标选取 HTTPS_PROXY（或 ALL_PROXY），尊重 NO_PROXY；只有 HTTP_PROXY 不代表 HTTPS 流量也应走代理。显式加载 SSL_CERT_FILE / SSL_CERT_DIR，二者均未设置时可用 REQUESTS_CA_BUNDLE。请在实际 Runner 与 CLI 各自的环境设置可信代理和 CA，不要在聊天、日志或插件配置中填写代理密码。保持证书及主机名校验，不跟随重定向，不继承 OpenAI 账号相关环境头。
 
 ### 官方授权链接未出现，提示网络或 TLS 失败
 
