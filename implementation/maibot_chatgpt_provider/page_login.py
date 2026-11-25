@@ -4,6 +4,7 @@ import asyncio
 import secrets
 from .errors import Error, MESSAGES
 from .oauth import login
+from . import catalog_install
 
 TTL = 300
 
@@ -154,6 +155,52 @@ class PageLogin:
 
         self.catalog_task = asyncio.create_task(fetch())
         return {"ok": True}
+
+    async def write_catalog(self, model_ids, generation):
+        try:
+            selected = catalog_install.selected_ids(model_ids)
+            if (
+                self.closed
+                or self.phase == "logging_out"
+                or type(generation) is not int
+                or generation <= 0
+                or self.catalog_generation != generation
+                or self.catalog_error
+                or (self.catalog_task and not self.catalog_task.done())
+                or not set(selected).issubset({m["slug"] for m in self.catalog})
+            ):
+                return {
+                    "ok": False,
+                    "problem": "账号或可用模型列表已改变，请刷新模型后重新选择。",
+                }
+
+            def commit():
+                store = self.manager.store
+                with store.lock():
+                    d = store.current()
+                    if (
+                        not d
+                        or d["state"] != "active"
+                        or d["session_generation"] != generation
+                    ):
+                        raise catalog_install.CatalogError(
+                            "登录会话已改变，请重新选择模型。"
+                        )
+                    return catalog_install.install(selected)
+
+            return await asyncio.to_thread(commit)
+        except catalog_install.CatalogError as exc:
+            return {"ok": False, "problem": str(exc)}
+        except FileNotFoundError:
+            return {
+                "ok": False,
+                "problem": "未找到指定的宿主模型库，请确认 Runner 挂载路径或使用手动添加。",
+            }
+        except Exception:
+            return {
+                "ok": False,
+                "problem": "无法完成写入，请检查模型库及备份目录的读写权限、空间和当前文件；不要放宽整个卷的权限。",
+            }
 
     async def logout(self):
         if self.closed or self.phase in (

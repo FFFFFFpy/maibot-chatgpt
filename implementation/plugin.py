@@ -120,6 +120,14 @@ class Plugin(MaiBotPlugin):
     async def connection_models(self):
         return await self.web_login.models()
 
+    @API(
+        "connection_write_catalog",
+        version="1",
+        description="确认后向共享模型库备份并追加选中模型",
+    )
+    async def connection_write_catalog(self, model_ids: list[str], generation: int):
+        return await self.web_login.write_catalog(model_ids, generation)
+
     @API("connection_logout", version="1", description="退出当前订阅账号")
     async def connection_logout(self):
         return await self.web_login.logout()
@@ -128,7 +136,7 @@ class Plugin(MaiBotPlugin):
     async def connection_cancel(self, attempt: str):
         return await self.web_login.cancel(attempt)
 
-    @LLMProvider("maibot.chatgpt.subscription", version="0.2.1")
+    @LLMProvider("maibot.chatgpt.subscription", version="0.3.0")
     async def handle_llm(self, operation: str, request: dict) -> dict:
         if not self.engine:
             raise Error("temporarily_unavailable")

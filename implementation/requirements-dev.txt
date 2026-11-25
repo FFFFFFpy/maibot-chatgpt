@@ -19,5 +19,6 @@ pydantic-core==2.50.5
 pygments==2.21.0
 pyjwt==2.15.1
 pytest==9.2.0
+tomlkit==0.15.3
 typing-extensions==4.16.0
 typing-inspection==0.4.5

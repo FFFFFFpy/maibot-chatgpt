@@ -1,5 +1,11 @@
 # MaiBot ChatGPT Subscription Provider · 验收记录
 
+## v0.3.0 · 管理员确认后追加共享模型库
+
+[安装包](../implementation/artifacts/maibot-chatgpt-provider-v0.3.0-web-login-preview.zip) 不在启动或刷新时写模型库。目标固定为用户授权的路径，不使用宿主内部 API。基线 ProcessLease 持锁时，临时目录中的插件写入被拒；释放后追加成功，原文件逐字节备份，实际 Host read_catalog 可读。
+
+[离线回归](../implementation/artifacts/catalog-write-results.xml)：188 passed、1 skipped、1 live deselected。Chromium 合成端到端：默认不选，选择后请求写入临时模型库、再次操作不重复。Host schema 校验了确认消息；未在生产容器点击或变更数据。冷安装及严格目录校验通过，真实分工调用仍待目标实测。
+
 ## v0.2.0 · 单 ZIP 浏览器登录
 
 [插件包](../implementation/artifacts/maibot-chatgpt-provider-v0.2.0-web-login-preview.zip) 已移除桌面助手，25 个白名单文件，SHA-256：a9425b0493706a5be0450198d4d975311b6f8319db674cdd8227c767dcc44545。未修改 MaiBot 核心。同机自动接收和远端粘贴精确返回地址共用一次消费入口；账号/模型/退出页不返回 token。

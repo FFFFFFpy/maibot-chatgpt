@@ -1,7 +1,8 @@
 {
   "schema_version": 2,
   "required_capabilities": [
-    "custom_pages"
+    "custom_pages",
+    "structured_arguments"
   ],
   "workspace_title": "ChatGPT 订阅",
   "pages": [
@@ -45,6 +46,25 @@
         },
         "logout": {
           "api": "connection_logout"
+        },
+        "write_catalog": {
+          "api": "connection_write_catalog",
+          "confirmation": "确认备份共享模型库并写入选中的订阅模型？不会修改分工；写入期间请勿在其他页面保存配置。",
+          "parameters": {
+            "model_ids": {
+              "type": "array",
+              "required": true,
+              "max_items": 100,
+              "items": {
+                "type": "string",
+                "max_length": 191
+              }
+            },
+            "generation": {
+              "type": "integer",
+              "required": true
+            }
+          }
         }
       }
     }

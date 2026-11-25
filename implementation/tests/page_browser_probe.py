@@ -50,10 +50,20 @@ async def check(host, browser_path, tmp):
     site, p = create(
         tmp, rsa.generate_private_key(public_exponent=65537, key_size=2048)
     )
+    from maibot_chatgpt_provider import catalog_install as ci
+    from tests.test_catalog_install import EMPTY
+    from unittest.mock import patch
+
+    target = tmp / "model_catalog.toml"
+    target.write_bytes(EMPTY)
+    assert page.actions["write_catalog"].confirmation
     calls = []
 
     async def invoke(m):
         calls.append(m["name"])
+        if m["name"] == "write_catalog":
+            with patch.object(ci, "install", lambda ids: ci.install_at(target, ids)):
+                return await p.write_catalog(**m["args"])
         return await getattr(p, m["name"])(**m["args"])
 
     async with async_playwright() as pw:
@@ -116,16 +126,37 @@ async def check(host, browser_path, tmp):
                 await tab.bring_to_front()
             await frame.get_by_text("已连接", exact=True).wait_for()
             await frame.get_by_text("synthetic-test", exact=True).wait_for()
-            await frame.get_by_role("button", name="复制模型 ID：synthetic-test").click()
+            await frame.get_by_role(
+                "button", name="复制模型 ID：synthetic-test"
+            ).click()
             note = await frame.locator("#copyNote").inner_text()
             if "已选中" in note:
                 field = frame.locator("#manualId")
                 assert await field.input_value() == "synthetic-test"
-                assert await field.evaluate("e=>e.selectionEnd-e.selectionStart===e.value.length")
+                assert await field.evaluate(
+                    "e=>e.selectionEnd-e.selectionStart===e.value.length"
+                )
             else:
                 assert "已复制 synthetic-test" in note
             await frame.locator("#guide summary").click()
-            assert "maibot.chatgpt.subscription" in await frame.locator("#guide").inner_text()
+            assert (
+                "maibot.chatgpt.subscription"
+                in await frame.locator("#guide").inner_text()
+            )
+            assert await frame.locator("#writeCatalog").is_disabled()
+            if mode == "remote":
+                assert target.read_bytes() == EMPTY
+            await frame.get_by_role("checkbox", name="synthetic-test").check()
+            await frame.locator("#writeCatalog").click()
+            await (
+                frame.locator("#writeNote")
+                .get_by_text(re.compile("已写入|均已存在"))
+                .wait_for()
+            )
+            assert (
+                len(list(tmp.glob("*.bak"))) == 1
+                and next(tmp.glob("*.bak")).read_bytes() == EMPTY
+            )
             await frame.locator("#models").click()
             for width in (400, 1024):
                 await tab.set_viewport_size({"width": width, "height": 740})

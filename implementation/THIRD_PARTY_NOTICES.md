@@ -5,6 +5,7 @@
 | 项目 | 使用范围 | 版本 / wheel 元数据许可证 |
 |---|---|---|
 | [MaiBot Plugin SDK](https://github.com/Mai-with-u/maibot-plugin-sdk) | 公开 Plugin/Config/LLMProvider 接口 | 2.23.0 · LGPL-3.0-only |
+| [TOML Kit](https://github.com/python-poetry/tomlkit) | 保留注释、追加选中的模型记录 | 0.15.3 · MIT |
 | [HTTPX](https://github.com/encode/httpx) | 有界 HTTP/认证请求/测试 transport | 0.28.1 · BSD-3-Clause |
 | [PyJWT](https://github.com/jpadilla/pyjwt) | RS256/JWKS | 2.15.1 · MIT |
 | [cryptography](https://github.com/pyca/cryptography) | 签名校验及测试时生成合成密钥 | 50.0.2 · Apache-2.0 OR BSD-3-Clause |

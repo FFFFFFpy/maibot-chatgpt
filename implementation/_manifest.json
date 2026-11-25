@@ -3,7 +3,7 @@
   "id": "local.maibot.chatgpt_subscription",
   "name": "MaiBot ChatGPT Subscription Provider",
   "description": "独立 SIWC 会话；纯文本开发预览",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "author": {
     "name": "Helw",
     "url": "https://github.com/FFFFFFpy"
@@ -21,6 +21,7 @@
     "max_version": "2.23.0"
   },
   "dependencies": [
+    {"type": "python_package", "name": "tomlkit", "version_spec": ">=0.13.3,<1"},
     {
       "type": "python_package",
       "name": "httpx",
@@ -40,7 +41,7 @@
   "llm_providers": [
     {
       "client_type": "maibot.chatgpt.subscription",
-      "version": "0.2.1"
+      "version": "0.3.0"
     }
   ],
   "capabilities": [],
