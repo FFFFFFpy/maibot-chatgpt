@@ -187,19 +187,20 @@ def test_QA021():
     }
     body = adapt("response", dict(REQ, context_items=[sys, user, assistant, user]))
     assert (
-        set(body) == {"model", "input", "store", "stream", "instructions"}
+        set(body) == {"model", "input", "store", "stream", "prompt_cache_key"}
         and body["stream"]
         and not body["store"]
     )
     msgs = body["input"]
-    assert body["instructions"] == "synthetic system"
-    assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
+    assert msgs[0]["content"][0]["text"] == "synthetic system"
+    assert [m["role"] for m in msgs] == ["developer", "user", "assistant", "user"]
     assert [p["type"] for m in msgs for p in m["content"]] == [
+        "input_text",
         "input_text",
         "output_text",
         "refusal",
         "input_text",
-    ] and msgs[1]["status"] == "completed"
+    ] and msgs[2]["status"] == "completed"
 
 
 @pytest.mark.parametrize(
@@ -250,6 +251,7 @@ def test_QA023(caplog, monkeypatch):
             "input",
             "stream",
             "store",
+            "prompt_cache_key",
         }
     assert caplog.text.count("temperature/max_tokens") == 1
     for change in [

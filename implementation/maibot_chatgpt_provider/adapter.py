@@ -3,7 +3,7 @@ import binascii
 import json
 import logging
 import re
-from uuid import uuid4
+from hashlib import sha256
 from .errors import Error
 from .model_probe import NAME as PROBE_NAME, diagnostic_definition, image_part
 from .oauth import RESOURCE, text
@@ -117,6 +117,71 @@ def content_parts(parts, role, visual, probe, budget):
     return result
 
 
+EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+
+
+def digest(value):
+    return sha256(
+        json.dumps(
+            value, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii")
+    ).hexdigest()[:40]
+
+
+def session_id(request):
+    meta = request.get("metadata")
+    candidates = (
+        request.get("session_id"),
+        meta.get("session_id") if isinstance(meta, dict) else None,
+    )
+    return next(
+        (s.strip() for s in candidates if isinstance(s, str) and s.strip()), None
+    )
+
+
+def cache_key(request, messages):
+    sid = session_id(request)
+    if sid:
+        return "mb:s:" + digest(sid)
+    # Only the first static text head, not later reminders, added turns or tool schemas.
+    head = next(
+        (
+            p["text"][:1024]
+            for m in messages
+            if m.get("role") == "developer"
+            for p in m["content"]
+            if p.get("text")
+        ),
+        None,
+    )
+    if head is None:
+        head = next(
+            (
+                p["text"][:1024]
+                for m in messages
+                if m.get("role") == "user"
+                for p in m["content"]
+                if p.get("text")
+            ),
+            "",
+        )
+    return "mb:p:" + digest(head)
+
+
+def state_lane(request):
+    # A prefix hash may be shared by unrelated chats. Never use it alone to replay opaque state.
+    if session_id(request):
+        return "session"
+    for item in request["context_items"]:
+        if item.get("item_type") == "UserMessageItem":
+            meta = item.get("meta")
+            anchor = meta.get("item_id") if isinstance(meta, dict) else None
+            return (
+                digest(anchor) if isinstance(anchor, str) and anchor.strip() else None
+            )
+    return None
+
+
 def adapt(operation, r):
     global _warned
     require(
@@ -158,7 +223,7 @@ def adapt(operation, r):
         extra.update(opt)
     if "reasoning_effort" in extra:
         effort = extra.pop("reasoning_effort")
-        require(effort in ("none", "minimal", "low", "medium", "high", "xhigh"))
+        require(effort in EFFORTS)
         body["reasoning"] = {"effort": effort}
     if extra:
         logging.getLogger(__name__).info(
@@ -172,12 +237,12 @@ def adapt(operation, r):
     items = r.get("context_items")
     require(isinstance(items, list) and items)
     messages = body["input"]
-    instructions = []
+    developers = []
     seen = set()
     pending = {}
     budget = [0]
     visual = info.get("visual") is True
-    for item in items:
+    for index, item in enumerate(items):
         require(isinstance(item, dict))
         kind = item.get("item_type")
         if kind == "FunctionCallItem":
@@ -222,20 +287,27 @@ def adapt(operation, r):
         role = _ROLES.get(kind)
         require(role)
         content = content_parts(item.get("parts"), role, visual, probe, budget)
-        if role == "developer" and not messages:
-            instructions.extend(p["text"] for p in content)
-            continue
         msg = dict(type="message", role=role, content=content)
+        if role == "developer":
+            developers.append(msg)
+            continue
         if role == "assistant":
-            msg.update(id="msg_" + uuid4().hex, status="completed")
+            meta = item.get("meta")
+            item_id = meta.get("item_id") if isinstance(meta, dict) else None
+            seed = (
+                ["host", item_id]
+                if isinstance(item_id, str) and item_id.strip()
+                else ["history", role, index, content, item.get("phase")]
+            )
+            msg.update(id="msg_" + digest(seed), status="completed")
             phase = item.get("phase")
             if phase is not None:
                 require(phase in ("commentary", "final_answer"))
                 msg["phase"] = phase
         messages.append(msg)
     require(not pending)
-    if instructions:
-        body["instructions"] = "\n\n".join(instructions)
+    messages[:0] = developers
+    body["prompt_cache_key"] = cache_key(r, messages)
     return body
 
 

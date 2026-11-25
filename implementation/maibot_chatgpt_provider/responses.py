@@ -1,6 +1,7 @@
 """Decode the official Responses event stream without importing a host OpenAI SDK."""
 
 import json
+import logging
 import re
 
 from .errors import Error, classify
@@ -141,6 +142,19 @@ def completed(r, probe_image=None, tool_names=()):
                 n = usage[src]
                 check(type(n) is int and n >= 0)
                 counts[dst] = n
+        details = usage.get("input_tokens_details")
+        cached = details.get("cached_tokens") if isinstance(details, dict) else None
+        total = counts.get("prompt_tokens")
+        if type(cached) is int and total is not None and 0 <= cached <= total:
+            counts.update(
+                prompt_cache_hit_tokens=cached, prompt_cache_miss_tokens=total - cached
+            )
+            logging.getLogger(__name__).info(
+                "prompt_cache cached_tokens=%d input_tokens=%d hit_rate=%s",
+                cached,
+                total,
+                ("%.1f%%" % (100 * cached / total)) if total else "n/a",
+            )
         if counts:
             result["usage"] = counts
     return result

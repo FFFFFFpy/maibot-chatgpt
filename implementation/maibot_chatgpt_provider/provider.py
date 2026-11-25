@@ -4,10 +4,11 @@ import random
 import re
 import time
 from dataclasses import dataclass
+from collections import OrderedDict
 import httpx
 from .wire import private_wire, network_client
 
-from .adapter import adapt
+from .adapter import adapt, state_lane, EFFORTS
 from .errors import Error, classify
 from .oauth import RESOURCE, text
 from .responses import StreamError, consume
@@ -36,7 +37,21 @@ def catalog(obj):
         if m["visibility"] == "list":
             if not text(m.get("slug")) or not text(m.get("display_name")):
                 raise Error("upstream")
-            out.append({k: m[k] for k in ("slug", "display_name")})
+            entry = {k: m[k] for k in ("slug", "display_name")}
+            raw = m.get("supported_reasoning_levels")
+            levels = []
+            if isinstance(raw, list):
+                for value in raw:
+                    level = value.get("effort") if isinstance(value, dict) else value
+                    if (
+                        isinstance(level, str)
+                        and level.strip() in EFFORTS
+                        and level.strip() not in levels
+                    ):
+                        levels.append(level.strip())
+            if levels:
+                entry["supported_reasoning_levels"] = levels
+            out.append(entry)
     if not out:
         raise Error("upstream")
     return out
@@ -54,6 +69,26 @@ async def bounded_json(response, limit):
         return None
 
 
+class _StateRejected(Exception):
+    pass
+
+
+def rejected_state(status, problem):
+    if status not in (400, 409, 422) or not isinstance(problem, dict):
+        return False
+    err = problem.get("error", problem)
+    if not isinstance(err, dict):
+        return False
+    return any(
+        isinstance(err.get(k), str)
+        and re.search(
+            r"(?i)\b(?:x-codex-turn-state|(?:invalid[_ -]|expired[_ -]|unknown[_ -]|stale[_ -])turn[_ -]state)\b",
+            err[k],
+        )
+        for k in ("code", "param", "message")
+    )
+
+
 class Provider:
     def __init__(self, manager, settings=Settings(), transport=None):
         self.manager = manager
@@ -69,23 +104,29 @@ class Provider:
             ),
         )
         self.tasks = set()
+        self.turn_states = OrderedDict()
         self.closed = False
         self.cool_until = 0.0
         self.probing = False
 
     async def dispatch(self, operation, request):
-        return await self._run(adapt(operation, request))
+        body = adapt(operation, request)
+        return await self._run(body, state_lane(request))
 
     async def models(self):
         return await self._run(None)
 
-    async def _send(self, body, token):
+    async def _send(self, body, token, state=None):
         method, path = ("GET", "/models") if body is None else ("POST", "/responses")
         headers = {
             "Authorization": "Bearer " + token,
             "Accept": "application/json" if body is None else "text/event-stream",
             "Accept-Encoding": "identity",
         }
+        if body is not None:
+            headers["session_id"] = headers["session-id"] = body["prompt_cache_key"]
+            if state is not None:
+                headers["x-codex-turn-state"] = state
         started = False
         try:
             with private_wire():
@@ -97,6 +138,8 @@ class Provider:
                 ) as r:
                     if r.status_code != 200:
                         problem = await bounded_json(r, 32768)
+                        if state is not None and rejected_state(r.status_code, problem):
+                            raise _StateRejected()
                         # Use only a whitelisted param path, never echo raw upstream messages.
                         err = (
                             problem.get("error") if isinstance(problem, dict) else None
@@ -123,7 +166,7 @@ class Provider:
                                 )
                         raise classify(r.status_code, problem, r.headers)
                     if body is None:
-                        return catalog(await bounded_json(r, 1048576))
+                        return catalog(await bounded_json(r, 1048576)), None
                     started = True
                     content_type = r.headers.get("content-type", "").strip()
                     if (
@@ -148,12 +191,20 @@ class Provider:
                         if names == {PROBE_NAME}
                         else None
                     )
-                    return await consume(
+                    result = await consume(
                         r,
                         self.cfg.max_buffered_text_bytes,
                         probe_image,
                         names if probe_image is None else (),
                     )
+                    # Preserve the header bytes; never log, persist or forward them elsewhere.
+                    raw = r.headers.get_list("x-codex-turn-state")
+                    new = (
+                        raw[0]
+                        if len(raw) == 1 and re.fullmatch(r"[!-~][ -~]{0,4095}", raw[0])
+                        else None
+                    )
+                    return result, new
         except httpx.TimeoutException:
             error = (
                 StreamError("接收官方事件流时超时，未交付部分结果。")
@@ -178,7 +229,7 @@ class Provider:
             )
         raise error
 
-    async def _run(self, body):
+    async def _run(self, body, lane=None):
         task = asyncio.current_task()
         cfg = self.cfg
         if self.closed:
@@ -195,10 +246,27 @@ class Provider:
                         raise Error("temporarily_unavailable")
                     self.probing = probe = True
                     probe_until = self.cool_until
+                recovered = False
                 for attempt in range(1 + cfg.pre_admission_retry_limit):
                     token, gen = await self.manager.take()
                     try:
-                        result = await self._send(body, token)
+                        key = (
+                            (gen, body["model"], body["prompt_cache_key"], lane)
+                            if body and lane
+                            else None
+                        )
+                        state = self.turn_states.get(key)
+                        if state is not None:
+                            self.turn_states.move_to_end(key)
+                        try:
+                            result, new = await self._send(body, token, state)
+                        except _StateRejected:
+                            recovered = True
+                            if self.turn_states.get(key) == state:
+                                self.turn_states.pop(key, None)
+                            await asyncio.to_thread(self.manager.store.check, gen)
+                            result, new = await self._send(body, token)
+                            state = None
                     except Error as e:
                         if e.category == "usage_paused":
                             await asyncio.to_thread(
@@ -218,7 +286,8 @@ class Provider:
                                 else cfg.temporary_cooldown_seconds
                             )
                             if (
-                                e.http_status in (429, 503)
+                                not recovered
+                                and e.http_status in (429, 503)
                                 and attempt < cfg.pre_admission_retry_limit
                                 and delay <= cfg.temporary_cooldown_seconds
                                 and delay + 0.25 < deadline - time.monotonic()
@@ -230,6 +299,11 @@ class Provider:
                             )
                         raise
                     await asyncio.to_thread(self.manager.store.check, gen)
+                    if key and new and self.turn_states.get(key) == state:
+                        self.turn_states[key] = new
+                        self.turn_states.move_to_end(key)
+                        if len(self.turn_states) > 256:
+                            self.turn_states.popitem(last=False)
                     if probe and self.cool_until == probe_until:
                         self.cool_until = 0.0
                     return result
@@ -250,4 +324,5 @@ class Provider:
         try:
             await self.manager.close()
         finally:
+            self.turn_states.clear()
             await self.http.aclose()

@@ -88,7 +88,8 @@ def test_parallel_roundtrip(tmp_path, caplog):
         b = json.loads(req.content)
         seen.append(b)
         assert (
-            b["instructions"] == "one\n\ntwo"
+            "instructions" not in b
+            and [p["text"] for p in b["input"][0]["content"]] == ["one", "two"]
             and b["reasoning"] == {"effort": "low"}
             and CANARY not in str(b)
         )

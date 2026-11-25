@@ -71,13 +71,23 @@ def probe(host):
                     content=[dict(type="refusal", refusal="synthetic refusal")],
                 )
             ],
-            usage=dict(input_tokens=3, output_tokens=8, total_tokens=11),
+            usage=dict(
+                input_tokens=3,
+                output_tokens=8,
+                total_tokens=11,
+                input_tokens_details={"cached_tokens": 2},
+            ),
         )
     )
     restored = PluginLLMClient._build_api_response(
         result, "synthetic", "synthetic", require_output_items=True
     )
-    assert restored.usage.total_tokens == 11
+    assert restored.usage.total_tokens == 11 and restored.usage.prompt_tokens == 3
+    assert (
+        restored.usage.prompt_cache_reported
+        and restored.usage.prompt_cache_hit_tokens == 2
+        and restored.usage.prompt_cache_miss_tokens == 1
+    )
     request.context_items.append(restored.output_items[0])
     next_snap = serialize_response_request_snapshot(request)
     assert adapt("response", next_snap)["input"][1]["content"][0]["type"] == "refusal"
