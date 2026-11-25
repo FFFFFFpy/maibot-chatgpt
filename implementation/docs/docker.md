@@ -12,18 +12,18 @@ docker inspect --format '{{range .Mounts}}{{println .Type .Source "->" .Destinat
 docker exec CONTAINER RUNNER_PYTHON -c 'import sys,importlib.metadata as m;print(sys.version.split()[0], m.version("maibot-plugin-sdk"))'
 ~~~
 
-记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/local.maibot.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。Windows 必须自己核验 DACL。本插件禁用 HTTPX 自动环境取值，使用默认可信 CA、官方 HTTPS 和无重定向的直连，不会自动套用环境代理。需要专用代理或额外 CA 才能出网的镜像应先做隔离适配和验收；不要关闭 TLS 或改写官方域名。
+记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/local.maibot.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。Windows 必须自己核验 DACL。插件按官方 HTTPS 目标选取 HTTPS_PROXY（或 ALL_PROXY），尊重 NO_PROXY；只有 HTTP_PROXY 不代表 HTTPS 流量也应走代理。显式加载 SSL_CERT_FILE / SSL_CERT_DIR，二者均未设置时可用 REQUESTS_CA_BUNDLE。请在实际 Runner 与 CLI 各自的环境设置可信代理和 CA，不要在聊天、日志或插件配置中填写代理密码。保持证书及主机名校验，不跟随重定向，不继承 OpenAI 账号相关环境头。
 
 ## 2 · 安装与迁移
 
-按[README](../README.md)补真实仓库元数据、解压候选；只在同版本测试实例启用，保存原模型配置哈希及私有备份。以 Runner 相同用户与解释器在容器内进入插件目录。在目标实际数据目录先执行：
+按[README](../README.md)生成纯插件 ZIP 并导入候选；只在同版本测试实例启用，保存原模型配置哈希及私有备份。以 Runner 相同用户与解释器在容器内进入插件目录。在目标实际数据目录先执行：
 
 ~~~sh
 python scripts/login.py --data-dir TARGET_PRIVATE_DIR init-host
 python scripts/login.py --data-dir TARGET_PRIVATE_DIR doctor
 ~~~
 
-桌面上的浏览器与 CLI 同机才可直接 login；容器的 127.0.0.1 不等于桌面的。官方自托管转移：
+推荐从插件扩展「订阅连接」选择「不同设备 / Docker」，按 [页面登录步骤](../README.md) 用桌面回调助手提交一次性加密回执，不传 credentials.json、不暴露容器回调端口。若管理地址仅支持 HTTP，请先配置 TLS 或 SSH 本机端口转发。以下是独立 CLI 登录的备选路线，不是页面登录前置：
 
 1. 桌面用相同版本、另一个本地私有目录执行 login。不要拷贝 host_identity.json。
 2. 停止桌面所有使用或刷新会话的进程。只通过私人加密通道传 credentials.json 至目标的临时私有文件。避免公开共享目录；Unix 先 umask 077，导入前 chmod 600。不传到聊天或工单。

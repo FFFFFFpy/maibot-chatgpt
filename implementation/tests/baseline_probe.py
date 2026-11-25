@@ -33,7 +33,6 @@ def probe(host):
     )
     from src.llm_models.payload_content.resp_format import RespFormat
     from src.plugin_runtime.runner.manifest_validator import PluginManifest
-    from pydantic import ValidationError
 
     model = deserialize_model_info_snapshot(
         dict(
@@ -83,20 +82,8 @@ def probe(host):
     next_snap = serialize_response_request_snapshot(request)
     assert adapt("response", next_snap)["input"][1]["content"][0]["type"] == "refusal"
     manifest = json.loads((ROOT / "_manifest.json").read_bytes())
-    try:
-        PluginManifest.model_validate(manifest)
-    except ValidationError as e:
-        assert {x["loc"] for x in e.errors()} == {
-            ("author", "url"),
-            ("urls", "repository"),
-        }
-    else:
-        raise AssertionError(
-            "Update baseline result: missing metadata no longer blocks"
-        )
-    print(
-        "synthetic source serializer -> adapter -> Host deserializer -> refusal replay: PASS; draft manifest blocked only on two actual URLs"
-    )
+    PluginManifest.model_validate(manifest)
+    print("synthetic source codec roundtrip and strict manifest schema: PASS")
 
 
 if __name__ == "__main__":

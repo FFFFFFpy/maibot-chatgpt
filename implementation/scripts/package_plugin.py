@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FOLDER = "maibot_chatgpt_provider_plugin"
 FILES = (
     "plugin.py",
+    "webui.json",
+    "web/connection.html",
+    "scripts/desktop_callback.py",
     "_manifest.json",
     "_locales/zh-CN.json",
     "pyproject.toml",
@@ -32,6 +35,7 @@ FILES = (
             "errors",
             "oauth",
             "oauth_constants",
+            "page_login",
             "provider",
             "responses",
             "token_manager",
@@ -57,20 +61,22 @@ def actual(url):
 
 
 def build(output, preview, author, repo):
-    if preview and (author or repo) or not preview and not (author and repo):
+    if bool(author) != bool(repo) or (preview and (author or repo)):
         raise ValueError("选择 --preview，或者同时提供真实作者主页与项目仓库 URL")
     output.mkdir(parents=True, exist_ok=True)
     destination = output / (
-        "maibot-chatgpt-provider-v0.1.0" + ("-preview" if preview else "") + ".zip"
+        "maibot-chatgpt-provider-v0.1.0-web-login" + ("-preview" if preview else "") + ".zip"
     )
     entries = {name: (ROOT / name).read_bytes() for name in FILES}
     manifest = json.loads(entries["_manifest.json"])
-    if not preview:
+    if author and repo:
         manifest["author"]["url"] = actual(author)
         manifest["urls"]["repository"] = actual(repo)
         entries["_manifest.json"] = (
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
         ).encode()
+    actual(manifest["author"]["url"])
+    actual(manifest["urls"]["repository"])
     with tempfile.NamedTemporaryFile(dir=output, delete=False, suffix=".tmp") as temp:
         temp_path = Path(temp.name)
     try:

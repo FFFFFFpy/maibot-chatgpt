@@ -17,7 +17,7 @@ from .credentials import DIRECT, ISSUER, pause_clear, stamp
 from .errors import Error
 
 from .oauth_constants import RESOURCE
-from .wire import private_wire
+from .wire import private_wire, network_client
 
 DISCOVERY = ISSUER + "/.well-known/openid-configuration"
 AUTHORIZE = ISSUER + "/api/accounts/authorize"
@@ -61,11 +61,11 @@ class OAuth:
         try:
             with (
                 private_wire(),
-                httpx.Client(
+                network_client(
+                    httpx.Client,
+                    "auth.openai.com",
                     transport=self.transport,
-                    follow_redirects=False,
                     timeout=left,
-                    trust_env=False,
                 ) as client,
             ):
                 with client.stream(method, url, data=form) as r:
@@ -256,17 +256,84 @@ class OAuth:
         raise Error("refresh_uncertain")
 
 
-async def login(store, oauth, opener=webbrowser.open, timeout=180):
-    host, old = await asyncio.to_thread(store.begin)
-    generation = old["session_generation"] if old else 0
-    client = old["registration"]["client_id"] if old else DYNAMIC
-    await asyncio.to_thread(oauth.discover)
+def pkce_material():
     state, nonce, verifier = (secrets.token_urlsafe(48) for _ in range(3))
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
         .decode()
         .rstrip("=")
     )
+    return state, nonce, verifier, challenge
+
+
+def authorize_url(host, client, old, state, nonce, challenge, redirect):
+    params = dict(
+        client_id=client,
+        ext_agent_host_id=host,
+        response_type="code",
+        scope=SCOPES,
+        resource=RESOURCE,
+        redirect_uri=redirect,
+        state=state,
+        nonce=nonce,
+        code_challenge=challenge,
+        code_challenge_method="S256",
+    )
+    if client == DYNAMIC:
+        params["agent_name_hint"] = APP
+    if old and old["state"] in (
+        "missing_direct_scope",
+        "auth_required",
+        "refresh_uncertain",
+    ):
+        params["prompt"] = "consent"
+    return AUTHORIZE + "?" + urlencode(params)
+
+
+def callback_pair(args, client):
+    issued = args.get("client_id", [None if client == DYNAMIC else client])
+    codes = args.get("code", [])
+    if (
+        "error" in args
+        or len(codes) != 1
+        or not text(codes[0])
+        or len(issued) != 1
+        or not text(issued[0])
+        or issued[0] == DYNAMIC
+        or client not in (DYNAMIC, issued[0])
+    ):
+        return None
+    return issued[0], codes[0]
+
+
+async def exchange(store, oauth, generation, issued, code, verifier, redirect, nonce):
+    obj = await asyncio.to_thread(
+        oauth.http,
+        "POST",
+        TOKEN,
+        form=dict(
+            grant_type="authorization_code",
+            resource=RESOURCE,
+            client_id=issued,
+            code=code,
+            code_verifier=verifier,
+            redirect_uri=redirect,
+        ),
+    )
+    d = await asyncio.to_thread(oauth.record, obj, issued, nonce=nonce)
+    await asyncio.to_thread(store.replace, d, generation)
+    if d["state"] != "active":
+        raise Error("permission_denied")
+
+
+async def login(
+    store, oauth, opener=webbrowser.open, timeout=180, *, port=0, on_exchange=None
+):
+    host, old = await asyncio.to_thread(store.begin)
+    generation = old["session_generation"] if old else 0
+    client = old["registration"]["client_id"] if old else DYNAMIC
+    await asyncio.to_thread(oauth.discover)
+    state, nonce, verifier, challenge = pkce_material()
     loop = asyncio.get_running_loop()
     answer = loop.create_future()
     handlers = set()
@@ -293,20 +360,10 @@ async def login(store, oauth, opener=webbrowser.open, timeout=180):
             ):
                 answer.set_result(None)
                 return
-            issued = args.get("client_id", [None if client == DYNAMIC else client])
-            codes = args.get("code", [])
-            if (
-                "error" in args
-                or len(codes) != 1
-                or not text(codes[0])
-                or len(issued) != 1
-                or not text(issued[0])
-                or issued[0] == DYNAMIC
-                or client not in (DYNAMIC, issued[0])
-            ):
-                answer.set_result(None)
+            pair = callback_pair(args, client)
+            answer.set_result(pair)
+            if pair is None:
                 return
-            answer.set_result((issued[0], codes[0]))
             ok = True
         except (
             ValueError,
@@ -322,7 +379,7 @@ async def login(store, oauth, opener=webbrowser.open, timeout=180):
                 writer.write(
                     b"HTTP/1.1 "
                     + (b"200 OK" if ok else b"400 Bad Request")
-                    + b"\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\nReturn to the CLI."
+                    + b"\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\nReturn to MaiBot to check the connection."
                 )
                 await writer.drain()
             except (ConnectionError, OSError):
@@ -331,34 +388,12 @@ async def login(store, oauth, opener=webbrowser.open, timeout=180):
                 writer.close()
                 handlers.discard(job)
 
-    server = await asyncio.start_server(callback, "127.0.0.1", 0, limit=16384)
+    server = await asyncio.start_server(callback, "127.0.0.1", port, limit=16384)
     redirect = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/auth/callback"
-    params = dict(
-        client_id=client,
-        ext_agent_host_id=host,
-        response_type="code",
-        scope=SCOPES,
-        resource=RESOURCE,
-        redirect_uri=redirect,
-        state=state,
-        nonce=nonce,
-        code_challenge=challenge,
-        code_challenge_method="S256",
-    )
-    if client == DYNAMIC:
-        params["agent_name_hint"] = APP
-    if old and old["state"] in (
-        "missing_direct_scope",
-        "auth_required",
-        "refresh_uncertain",
-    ):
-        params["prompt"] = "consent"
+    url = authorize_url(host, client, old, state, nonce, challenge, redirect)
     try:
         async with asyncio.timeout(timeout):
-            if (
-                await asyncio.to_thread(opener, AUTHORIZE + "?" + urlencode(params))
-                is False
-            ):
+            if await asyncio.to_thread(opener, url) is False:
                 raise Error("invalid_login")
             pair = await answer
     except TimeoutError:
@@ -373,20 +408,6 @@ async def login(store, oauth, opener=webbrowser.open, timeout=180):
     if not pair:
         raise Error("invalid_login")
     issued, code = pair
-    obj = await asyncio.to_thread(
-        oauth.http,
-        "POST",
-        TOKEN,
-        form=dict(
-            grant_type="authorization_code",
-            resource=RESOURCE,
-            client_id=issued,
-            code=code,
-            code_verifier=verifier,
-            redirect_uri=redirect,
-        ),
-    )
-    d = await asyncio.to_thread(oauth.record, obj, issued, nonce=nonce)
-    await asyncio.to_thread(store.replace, d, generation)
-    if d["state"] != "active":
-        raise Error("permission_denied")
+    if on_exchange:
+        on_exchange()
+    await exchange(store, oauth, generation, issued, code, verifier, redirect, nonce)

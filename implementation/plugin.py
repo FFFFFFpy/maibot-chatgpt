@@ -4,6 +4,7 @@ from typing import Literal
 from maibot_sdk import (
     CONFIG_RELOAD_SCOPE_SELF,
     Field,
+    API,
     LLMProvider,
     MaiBotPlugin,
     PluginConfigBase,
@@ -11,6 +12,7 @@ from maibot_sdk import (
 from .maibot_chatgpt_provider.credentials import Store
 from .maibot_chatgpt_provider.errors import Error
 from .maibot_chatgpt_provider.oauth import OAuth
+from .maibot_chatgpt_provider.page_login import PageLogin
 from .maibot_chatgpt_provider.provider import Provider, Settings
 from .maibot_chatgpt_provider.token_manager import TokenManager
 
@@ -76,6 +78,7 @@ class Plugin(MaiBotPlugin):
 
     async def on_load(self):
         self.engine = self.build(Config.model_validate(self.get_plugin_config_data()))
+        self.web_login = PageLogin(self.engine.manager)
 
     async def on_config_update(self, scope, config_data, version):
         if scope != CONFIG_RELOAD_SCOPE_SELF or self.engine is None:
@@ -88,14 +91,34 @@ class Plugin(MaiBotPlugin):
             raise Error("invalid_config")
         new = self.build(config)
         old = self.engine
+        await self.web_login.close()
         self.engine = new
+        self.web_login = PageLogin(new.manager)
         await old.close()
 
     async def on_unload(self):
         old = self.engine
         self.engine = None
+        if getattr(self, "web_login", None):
+            await self.web_login.close()
         if old:
             await old.close()
+
+    @API("connection_status", version="1", description="读取登录事务与会话状态")
+    async def connection_status(self):
+        return await self.web_login.status()
+
+    @API("connection_start", version="1", description="开始订阅授权")
+    async def connection_start(self, mode: str):
+        return await self.web_login.start(mode)
+
+    @API("connection_finish", version="1", description="验证一次性加密回执")
+    async def connection_finish(self, envelope: str):
+        return await self.web_login.finish(envelope)
+
+    @API("connection_cancel", version="1", description="取消未完成授权")
+    async def connection_cancel(self, attempt: str):
+        return await self.web_login.cancel(attempt)
 
     @LLMProvider("maibot.chatgpt.subscription", version="0.1.0")
     async def handle_llm(self, operation: str, request: dict) -> dict:

@@ -2,20 +2,29 @@
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起纯文本请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。工具、图像、音频、Embedding、结构化输出不在 P0；跨供应商回退归 Host。
 
-**发布状态：预览 ZIP 原样不能通过固定 Host 的严格 Manifest 检查。** 缺真实 author.url 和 urls.repository，不以假地址填充。没有在目标容器、真实账号或群聊中运行。不要覆盖生产安装。研究基线与边界见 [兼容报告](docs/compatibility-report.md)。
+**发布状态：已补齐作者主页与仓库地址，供隔离实例 G2 验证。** 没有在目标容器、真实账号或群聊中运行。不要覆盖生产安装。研究基线与边界见 [兼容报告](docs/compatibility-report.md)。
 
 ## 从零开始
 
 1. 先确认 [Docker 手册](docs/docker.md) 的镜像、配置、持久挂载和 Runner Python。开发基线为 MaiBot 1.4.8、SDK 2.23.0、Python 3.12。不把这组版本当作目标环境。若 Host/SDK 不一致，先复查契约；不要放宽 Manifest 或自动升级共享环境。
 2. 在桌面或临时目录解压预览 ZIP，进入含 `plugin.py` 的目录。创建**单独**环境（Windows 用 `py -3.12 -m venv .venv`，macOS/Linux 用 `python3.12 -m venv .venv`）。以下 `python` 指这个环境的解释器：Windows `.venv\Scripts\python.exe`，macOS/Linux `.venv/bin/python`。
 3. 运行 `python -m pip install -r requirements.txt`、`python -m pip check`、`python scripts/login.py --help`。锁定的运行依赖不是建议覆盖 Host 环境；先在同镜像副本核对冲突。源码开发可用 `uv sync --locked --python 3.12`、`uv run --locked python -m pytest -m offline`（保留任务包相邻 fixtures 目录）。
-4. 确有真实公开或内部 HTTP(S) 项目仓库与作者主页后，在解压目录构建候选：
+4. 仅使用白名单打包器生成的插件 ZIP；不要把任务包根目录复制到插件目录。可在源码或解压目录重建：
 
 ~~~text
-python scripts/package_plugin.py --output-dir OUTPUT --author-url ACTUAL_AUTHOR_URL --repository-url ACTUAL_PROJECT_URL
+python scripts/package_plugin.py --output-dir OUTPUT --preview
 ~~~
 
-   只改新 ZIP 内的 Manifest，不上传，不验证 URL 所有权，不表示门禁通过。将候选解压到**测试实例**的插件目录，形成 `plugins/maibot_chatgpt_provider_plugin/_manifest.json`（不要双层嵌套）。用该实例实际 validator/Runner 确认发现、依赖、启用及唯一注册。先用 mock 上游和私有测试任务做 G2，再做 G3。源码打相同预览用 `--preview --output-dir OUTPUT`。
+   构建不上传、不启用，也不代表目标 Runner 的门禁通过。将候选解压到**测试实例**的插件目录，形成 `plugins/maibot_chatgpt_provider_plugin/_manifest.json`（不要双层嵌套）。用该实例实际 validator/Runner 确认发现、依赖、启用及唯一注册。先用 mock 上游和私有测试任务做 G2，再做 G3。源码打相同预览用 `--preview --output-dir OUTPUT`。
+
+## 从插件页面连接 ChatGPT（本测试包新增）
+
+1. 在测试实例的插件管理中上传本 ZIP 并启用插件。打开插件详情的「订阅连接」扩展页；若该版仪表盘把扩展放在侧栏，从「插件扩展 → ChatGPT 订阅 → 订阅连接」进入。仅支持可信 HTTPS 管理地址或经过安全隧道的本机回环地址。明文 LAN 页面不会启动登录。
+2. **远端 / Docker（默认）**：在浏览器所在电脑上也解压同一个 ZIP。页面点击「连接 ChatGPT」，复制配对串。桌面终端进入解压后含 plugin.py 的目录，运行 **python scripts/desktop_callback.py**（Windows 也可 py -3 scripts/desktop_callback.py）。桌面只需 Python 3.9+ 和现代浏览器，无第三方依赖。在提示处粘贴配对串并回车。脚本先监听本机 127.0.0.1:1455 再打开官方授权页，不输入或保存账号密码。
+3. 在 OpenAI 页面同意后，本机回调页点击「保存登录回执」。回到 MaiBot 原页选择回执文件；若无法下载，可粘贴**加密回执**。切勿粘贴回调网址、授权码或 token。会话仅在 Runner 验签并写入 data_dir 后显示「已连接」。回执和配对串仅供本次使用，五分钟过期，可取消并重试；完成后删除回执。
+4. **同机模式**仅适用于浏览器与 Runner 共享 127.0.0.1，或已明确将桌面回环 1455 安全转发到 Runner 同一回环端口的部署。选同机、点击连接，将显示的官方链接在新标签打开；回调后页面自动更新。宿主 iframe 不允许弹出外部窗口，勿把容器的 localhost 当作桌面。无需向 LAN 发布 1455。
+
+模块使用宿主 schema 2 的 custom_pages 与静态 API；不替换宿主 WebUI。桌面助手不会访问 MaiBot、读取浏览器缓存或处理 token。回调用每次授权独有的 RSA-OAEP/SHA256 + AES-GCM 加密；验签、换码与持久化始终在 Runner，沿用 CLI 的 PKCE 与 OIDC 校验。CLI 登录保留为备用。
 
 ## CLI：不要把密码、授权码、token 或授权 URL 发给别人
 

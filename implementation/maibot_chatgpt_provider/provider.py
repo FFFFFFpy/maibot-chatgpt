@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 import httpx
 from openai import APIStatusError, OpenAIError
-from .wire import DirectSDK, private_wire
+from .wire import DirectSDK, private_wire, network_client
 
 from .adapter import adapt
 from .errors import Error, classify
@@ -58,10 +58,10 @@ class Provider:
         self.manager = manager
         self.cfg = settings
         self.slots = asyncio.Semaphore(settings.max_concurrent_requests)
-        self.http = httpx.AsyncClient(
+        self.http = network_client(
+            httpx.AsyncClient,
+            "api.openai.com",
             transport=transport,
-            follow_redirects=False,
-            trust_env=False,
             timeout=httpx.Timeout(
                 settings.read_idle_timeout_seconds,
                 connect=settings.connect_timeout_seconds,

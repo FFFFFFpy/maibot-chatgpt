@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "required_capabilities": [
+    "custom_pages"
+  ],
+  "workspace_title": "ChatGPT 订阅",
+  "pages": [
+    {
+      "id": "connection",
+      "title": "订阅连接",
+      "icon": "settings",
+      "mode": "custom",
+      "entry": "web/connection.html",
+      "queries": {
+        "status": {
+          "api": "connection_status"
+        }
+      },
+      "actions": {
+        "start": {
+          "api": "connection_start",
+          "parameters": {
+            "mode": {
+              "type": "string",
+              "required": true,
+              "choices": [
+                "local",
+                "desktop"
+              ]
+            }
+          }
+        },
+        "finish": {
+          "api": "connection_finish",
+          "parameters": {
+            "envelope": {
+              "type": "string",
+              "required": true,
+              "max_length": 24576
+            }
+          }
+        },
+        "cancel": {
+          "api": "connection_cancel",
+          "parameters": {
+            "attempt": {
+              "type": "string",
+              "required": true,
+              "max_length": 100
+            }
+          }
+        }
+      }
+    }
+  ]
+}
