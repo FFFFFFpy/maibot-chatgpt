@@ -15,6 +15,32 @@ def dispatch(tmp_path, res):
     return run(p, lambda p: p.dispatch("response", request()))
 
 
+@pytest.mark.parametrize(
+    "content_type",
+    [None, "", "Text/Event-Stream; charset=utf-8", "text/html", "application/json"],
+)
+def test_http_200_sse_content_type(tmp_path, content_type):
+    wire = ev("response.created") + ev(
+        "response.completed", response=response(output=[function_item(False)])
+    )
+    headers = {} if content_type is None else {"Content-Type": content_type}
+    res = httpx.Response(200, content=wire, headers=headers)
+    if content_type is None:
+        assert "content-type" not in res.headers
+    if content_type in ("text/html", "application/json"):
+        with pytest.raises(Error, match="text/event-stream"):
+            dispatch(tmp_path, res)
+    else:
+        result = dispatch(tmp_path, res)
+        assert result["status"] == "completed"
+        assert result["output_items"][0]["tool_call"]["call_id"] == "synthetic-call"
+
+
+def test_headerless_sse_requires_completion(tmp_path):
+    with pytest.raises(Error, match="提前结束"):
+        dispatch(tmp_path, httpx.Response(200, content=ev("response.created")))
+
+
 @pytest.mark.parametrize("order", ["before", "after"])
 def test_valid_report_with_empty_message(tmp_path, order):
     items = [

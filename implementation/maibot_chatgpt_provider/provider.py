@@ -100,11 +100,10 @@ class Provider:
                     if body is None:
                         return catalog(await bounded_json(r, 1048576))
                     started = True
+                    content_type = r.headers.get("content-type", "").strip()
                     if (
-                        r.headers.get("content-type", "")
-                        .partition(";")[0]
-                        .strip()
-                        .lower()
+                        content_type
+                        and content_type.partition(";")[0].strip().lower()
                         != "text/event-stream"
                     ):
                         raise StreamError(
