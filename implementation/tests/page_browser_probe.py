@@ -116,6 +116,16 @@ async def check(host, browser_path, tmp):
                 await tab.bring_to_front()
             await frame.get_by_text("已连接", exact=True).wait_for()
             await frame.get_by_text("synthetic-test", exact=True).wait_for()
+            await frame.get_by_role("button", name="复制模型 ID：synthetic-test").click()
+            note = await frame.locator("#copyNote").inner_text()
+            if "已选中" in note:
+                field = frame.locator("#manualId")
+                assert await field.input_value() == "synthetic-test"
+                assert await field.evaluate("e=>e.selectionEnd-e.selectionStart===e.value.length")
+            else:
+                assert "已复制 synthetic-test" in note
+            await frame.locator("#guide summary").click()
+            assert "maibot.chatgpt.subscription" in await frame.locator("#guide").inner_text()
             await frame.locator("#models").click()
             for width in (400, 1024):
                 await tab.set_viewport_size({"width": width, "height": 740})
