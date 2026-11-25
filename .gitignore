@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+.p0-dev/
+.pytest_cache/
+.ruff_cache/
+host_identity.json
+credentials.json
+credentials.lock
+.siwc-*

@@ -1,0 +1,12 @@
+[project]
+name = "maibot-chatgpt-provider"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["maibot-plugin-sdk==2.23.0", "httpx==0.28.1", "PyJWT==2.15.1", "cryptography==50.0.2", "openai==2.54.0"]
+
+[dependency-groups]
+dev = ["pytest==9.2.0"]
+
+[tool.pytest.ini_options]
+addopts = "-m offline --strict-markers"
+markers = ["offline: synthetic, no external services", "host: target runner required", "live: explicit personal authorization required"]
