@@ -36,8 +36,8 @@ async def check(host,browser_path,tmp):
             elif r.request.url.startswith(f'http://127.0.0.1:{PORT}/'):await r.continue_()
             else:await r.abort()
         await ctx.route('**/*',route)
-        frame=tab.frame_locator('iframe');await tab.goto('http://synthetic.invalid/');await frame.get_by_text('当前管理连接不受保护').wait_for();assert not calls
-        await tab.goto('https://synthetic.invalid/');await frame.locator('#start').click();await frame.locator('#material').wait_for();pair,state=decode_pair(await frame.locator('#material').input_value());site.seen=parse_qs(urlsplit(pair['url']).query)
+        frame=tab.frame_locator('iframe');await tab.goto('https://synthetic.invalid/');await frame.locator('#start').wait_for();assert not await frame.locator('#httpNotice').is_visible()
+        await tab.goto('http://synthetic.invalid/');await frame.locator('#httpNotice').wait_for();await frame.locator('#start').click();await frame.locator('#material').wait_for();pair,state=decode_pair(await frame.locator('#material').input_value());site.seen=parse_qs(urlsplit(pair['url']).query)
         with Local(('127.0.0.1',PORT),handler(pair,state)) as server:
             thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
             try:
@@ -49,7 +49,7 @@ async def check(host,browser_path,tmp):
         for width in (400,1024):
             await tab.set_viewport_size({'width':width,'height':720});assert await frame.locator('main').evaluate('e=>e.scrollWidth<=e.clientWidth');await tab.screenshot(path=str(tmp/f'synthetic-{width}.png'))
         await browser.close()
-    print('PASS: HTTP LAN blocked; HTTPS sandbox bridge -> start -> real loopback callback -> Chromium WebCrypto receipt download/upload -> verified active session; mobile/desktop fit')
+    print('PASS: HTTPS ready; HTTP LAN sandbox bridge -> start -> real loopback callback -> Chromium WebCrypto receipt download/upload -> verified active session; mobile/desktop fit')
 
 if __name__=='__main__':
     with tempfile.TemporaryDirectory() as d: asyncio.run(check(Path(sys.argv[1]),Path(sys.argv[2]),Path(d)))

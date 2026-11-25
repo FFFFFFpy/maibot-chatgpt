@@ -1,5 +1,9 @@
 # MaiBot ChatGPT Subscription Provider · 验收记录
 
+## v0.1.2 · 管理页支持 HTTP
+
+[测试包](../artifacts/maibot-chatgpt-provider-v0.1.2-web-login-preview.zip)：局域网 HTTP 管理页不再阻断授权，只显示明文提示；官方 OAuth、token 和推理端点保持 HTTPS。Chromium 在合成非回环 HTTP 父页面中完成配对、回执上传和状态更新；未使用目标管理口令或真实订阅。冻结离线回归 152 passed、1 live deselected；ZIP 冷装及严格目录校验通过。
+
 ## v0.1.1 · 共享 Runner 依赖兼容修订
 
 目标截图确认 v0.1.0 在发现阶段因要求 openai==2.54.0 被拒（宿主已有 3.55.1）。本次移除该包运行依赖，不修改宿主。官方接口、登录页面、流式完成条件保持不变。

@@ -1,4 +1,4 @@
-# MaiBot ChatGPT Subscription Provider · v0.1.1 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.1.2 开发预览
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起纯文本请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。工具、图像、音频、Embedding、结构化输出不在 P0；跨供应商回退归 Host。
 
@@ -23,7 +23,7 @@ python scripts/package_plugin.py --output-dir OUTPUT --preview
 
 ## 从插件页面连接 ChatGPT（本测试包新增）
 
-1. 在测试实例的插件管理中上传本 ZIP 并启用插件。打开插件详情的「订阅连接」扩展页；若该版仪表盘把扩展放在侧栏，从「插件扩展 → ChatGPT 订阅 → 订阅连接」进入。仅支持可信 HTTPS 管理地址或经过安全隧道的本机回环地址。明文 LAN 页面不会启动登录。
+1. 在测试实例的插件管理中上传本 ZIP 并启用插件。打开插件详情的「订阅连接」扩展页；若该版仪表盘把扩展放在侧栏，从「插件扩展 → ChatGPT 订阅 → 订阅连接」进入。HTTP 和 HTTPS 管理页均可直接发起登录。HTTP 仅显示非阻断提示，不要求隧道；请仅在可信网络使用。官方授权、换码及推理仍使用 HTTPS。
 2. **远端 / Docker（默认）**：在浏览器所在电脑上也解压同一个 ZIP。页面点击「连接 ChatGPT」，复制配对串。桌面终端进入解压后含 plugin.py 的目录，运行 **python scripts/desktop_callback.py**（Windows 也可 py -3 scripts/desktop_callback.py）。桌面只需 Python 3.9+ 和现代浏览器，无第三方依赖。在提示处粘贴配对串并回车。脚本先监听本机 127.0.0.1:1455 再打开官方授权页，不输入或保存账号密码。
 3. 在 OpenAI 页面同意后，本机回调页点击「保存登录回执」。回到 MaiBot 原页选择回执文件；若无法下载，可粘贴**加密回执**。切勿粘贴回调网址、授权码或 token。会话仅在 Runner 验签并写入 data_dir 后显示「已连接」。回执和配对串仅供本次使用，五分钟过期，可取消并重试；完成后删除回执。
 4. **同机模式**仅适用于浏览器与 Runner 共享 127.0.0.1，或已明确将桌面回环 1455 安全转发到 Runner 同一回环端口的部署。选同机、点击连接，将显示的官方链接在新标签打开；回调后页面自动更新。宿主 iframe 不允许弹出外部窗口，勿把容器的 localhost 当作桌面。无需向 LAN 发布 1455。

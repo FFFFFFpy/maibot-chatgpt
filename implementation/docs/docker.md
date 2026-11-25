@@ -23,7 +23,7 @@ python scripts/login.py --data-dir TARGET_PRIVATE_DIR init-host
 python scripts/login.py --data-dir TARGET_PRIVATE_DIR doctor
 ~~~
 
-推荐从插件扩展「订阅连接」选择「不同设备 / Docker」，按 [页面登录步骤](../README.md) 用桌面回调助手提交一次性加密回执，不传 credentials.json、不暴露容器回调端口。若管理地址仅支持 HTTP，请先配置 TLS 或 SSH 本机端口转发。以下是独立 CLI 登录的备选路线，不是页面登录前置：
+推荐从插件扩展「订阅连接」选择「不同设备 / Docker」，按 [页面登录步骤](../README.md) 用桌面回调助手提交一次性加密回执，不传 credentials.json、不暴露容器回调端口。管理页也支持局域网 HTTP，无需额外配置隧道；HTTP 不保护管理会话，请仅在可信网络使用。以下是独立 CLI 登录的备选路线，不是页面登录前置：
 
 1. 桌面用相同版本、另一个本地私有目录执行 login。不要拷贝 host_identity.json。
 2. 停止桌面所有使用或刷新会话的进程。只通过私人加密通道传 credentials.json 至目标的临时私有文件。避免公开共享目录；Unix 先 umask 077，导入前 chmod 600。不传到聊天或工单。
