@@ -187,19 +187,19 @@ def test_QA021():
     }
     body = adapt("response", dict(REQ, context_items=[sys, user, assistant, user]))
     assert (
-        set(body) == {"model", "input", "store", "stream"}
+        set(body) == {"model", "input", "store", "stream", "instructions"}
         and body["stream"]
         and not body["store"]
     )
     msgs = body["input"]
-    assert [m["role"] for m in msgs] == ["developer", "user", "assistant", "user"]
+    assert body["instructions"] == "synthetic system"
+    assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
     assert [p["type"] for m in msgs for p in m["content"]] == [
-        "input_text",
         "input_text",
         "output_text",
         "refusal",
         "input_text",
-    ] and msgs[2]["status"] == "completed"
+    ] and msgs[1]["status"] == "completed"
 
 
 @pytest.mark.parametrize(
@@ -256,8 +256,8 @@ def test_QA023(caplog, monkeypatch):
         dict(extra_params={"metadata": 1}),
         dict(model_info=dict(REQ["model_info"], extra_params={"bad": 1})),
     ]:
-        with pytest.raises(Error):
-            adapt("response", dict(REQ, **change))
+        assert adapt("response", dict(REQ, **change)) == adapt("response", REQ)
+    assert "已忽略未映射" in caplog.text
 
 
 @pytest.mark.parametrize(

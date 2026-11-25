@@ -41,7 +41,11 @@ def check(condition, reason="完成事件的输出结构不符合预期，未交
         raise StreamError(reason)
 
 
-def completed(r, probe_image=None):
+def invalid_constant(_):
+    raise ValueError
+
+
+def completed(r, probe_image=None, tool_names=()):
     check(
         isinstance(r, dict)
         and r.get("status") == "completed"
@@ -51,12 +55,41 @@ def completed(r, probe_image=None):
     check(isinstance(r.get("output"), list), "完成事件未包含有效的 output 列表。")
     items = []
     reported = False
+    call_ids = set()
     for message in r["output"]:
         check(isinstance(message, dict), "完成事件的输出项格式无效。")
         if probe_image is not None and message.get("type") == "function_call":
             check(not reported)
             items.append(report_item(message, probe_image))
             reported = True
+            continue
+        if tool_names and message.get("type") == "function_call":
+            name = message.get("name")
+            cid = message.get("call_id")
+            raw = message.get("arguments")
+            check(
+                isinstance(name, str)
+                and name in tool_names
+                and isinstance(cid, str)
+                and 0 < len(cid.strip())
+                and len(cid) <= 256
+                and cid not in call_ids
+                and message.get("status", "completed") == "completed"
+                and isinstance(raw, str),
+                "完成事件的函数名、状态或 call_id 无效。",
+            )
+            try:
+                args = json.loads(raw, parse_constant=invalid_constant)
+            except (ValueError, RecursionError):
+                args = None
+            check(isinstance(args, dict), "工具调用参数不是合法 JSON 对象。")
+            call_ids.add(cid)
+            items.append(
+                dict(
+                    item_type="FunctionCallItem",
+                    tool_call=dict(call_id=cid, func_name=name, args=args),
+                )
+            )
             continue
         if message.get("type") == "reasoning":
             continue
@@ -82,7 +115,7 @@ def completed(r, probe_image=None):
             parts.append({"type": key, key: p[key]})
         if not any(p[p["type"]].strip() for p in parts):
             # A tool-only turn may have an empty assistant message alongside the real call.
-            if probe_image is not None:
+            if probe_image is not None or tool_names:
                 continue
             raise StreamError("完成事件里没有非空正文或拒答。")
         item = dict(item_type="AssistantMessageItem", parts=parts)
@@ -159,7 +192,7 @@ async def events(response, limit):
             data.append(value)
 
 
-async def consume(response, limit, probe_image=None):
+async def consume(response, limit, probe_image=None, tool_names=()):
     saw_events = False
     async for event, payload in events(response, limit):
         if payload == "[DONE]":
@@ -173,7 +206,7 @@ async def consume(response, limit, probe_image=None):
             "事件类型缺失或与 SSE 标记不一致。",
         )
         if typ == "response.completed":
-            return completed(data.get("response"), probe_image)
+            return completed(data.get("response"), probe_image, tool_names)
         if typ in ("response.failed", "error"):
             body = data.get("response", data)
             failure = classify(200, body, response.headers, stream=True)
@@ -199,7 +232,10 @@ async def consume(response, limit, probe_image=None):
                 isinstance(item, dict)
                 and (
                     item.get("type") in ("message", "reasoning")
-                    or (probe_image is not None and item.get("type") == "function_call")
+                    or (
+                        (probe_image is not None or tool_names)
+                        and item.get("type") == "function_call"
+                    )
                 ),
                 "事件流包含本次请求不支持的输出项类型。",
             )

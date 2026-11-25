@@ -90,6 +90,56 @@ def probe(host):
     from tests.test_provider import sse, ev, response
     from tests.support import engine
 
+    # Project two pure tool calls through the actual Host and reserialize them for
+    # a second round in which the original tools no longer exist.
+    from tests.test_planner import call
+
+    raw = completed(
+        response(output=[call("wait", "c1", {}), call("reply", "c2", {"a": 1})]),
+        tool_names={"wait", "reply"},
+    )
+    native = PluginLLMClient._build_api_response(
+        raw, "synthetic", "synthetic", require_output_items=True
+    )
+    assert [c.call_id for c in native.tool_calls] == ["c1", "c2"]
+    history = [user, *native.output_items]
+    for cid, name in [("c2", "reply"), ("c1", "wait")]:
+        history.append(
+            deserialize_context_item_snapshot(
+                dict(
+                    item_type="FunctionCallOutputItem",
+                    meta=dict(
+                        snap["context_items"][0]["meta"],
+                        logical_turn_id="synthetic-turn",
+                        item_id="result-" + cid,
+                    ),
+                    call_id=cid,
+                    tool_name=name,
+                    success=True,
+                    output="synthetic result",
+                )
+            )
+        )
+    second = ResponseRequest(
+        model_info=model,
+        context_items=history,
+        tool_options=normalize_tool_options(
+            [
+                {
+                    "name": "web_fetch",
+                    "description": "synthetic",
+                    "parameters_schema": {"type": "object", "properties": {}},
+                }
+            ]
+        ),
+    )
+    checked = adapt("response", serialize_response_request_snapshot(second))
+    assert [t["name"] for t in checked["tools"]] == ["web_fetch"] and [
+        i["call_id"] for i in checked["input"] if i["type"] == "function_call_output"
+    ] == ["c2", "c1"]
+    print(
+        "native parallel tool-only response / changed definitions / reverse-order results roundtrip: PASS"
+    )
     path = host / "src/webui/routers/model.py"
     root = ast.parse(path.read_text(encoding="utf-8"))
     keep = {

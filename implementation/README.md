@@ -1,6 +1,6 @@
-# MaiBot ChatGPT Subscription Provider · v0.3.3 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.4.0 开发预览
 
-仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起纯文本请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。除原生模型测试的报告工具与固定测试图外，不提供通用工具或图像、音频、Embedding、结构化输出；跨供应商回退归 Host。
+仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起文本、函数工具及视觉请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。不执行工具，不提供音频、Embedding 或结构化输出；跨供应商回退归 Host。
 
 **发布状态：已补齐作者主页与仓库地址，供隔离实例 G2 验证。** 没有在目标容器、真实账号或群聊中运行。不要覆盖生产安装。研究基线与边界见 [兼容报告](docs/compatibility-report.md)。
 
@@ -17,7 +17,11 @@
 
 ## 分工前测试单个模型
 
-在原生「模型库」找到具体模型，点击模型行右侧的 ⚡，不用先分配任务。插件将该行模型 ID、测试提示、MaiBot 内置测试报告工具，以及启用视觉时的基线测试 PNG 一起交给官方 Responses API。仅模型真实返回已完成、参数符合要求的测试工具调用才回报成功；测试会使用订阅额度。未开放通用工具、任意图片或自动执行工具。若模型不支持视觉，可关闭该模型的「视觉」后重测不带图的版本。
+在原生「模型库」找到具体模型，点击模型行右侧的 ⚡，不用先分配任务。插件将该行模型 ID、测试提示、MaiBot 内置测试报告工具，以及启用视觉时的基线测试 PNG 一起交给官方 Responses API。仅模型真实返回已完成、参数符合要求的测试工具调用才回报成功；测试会使用订阅额度。闪电按钮只验证内置报告，不代表 planner 多轮验收。若模型不支持视觉，可关闭该模型的「视觉」后重测不带图的版本。
+
+## Planner 与动态工具
+
+每轮从宿主快照重新构造函数列表并设置 `strict: false`，不缓存工具、不执行或调度。保留 Schema（包括 schedule 的 not）；若上游拒绝，不擅自删约束重试。首条系统消息的所有文本段进入 instructions。纯工具输出和并行调用均按原 call_id 回传。基线 Host 的工具媒体通常出现在结果后的独立用户消息；保留其 media_index 和图文顺序。视觉关闭时用明确的文字占位，不下载任何图片 URL。请求层 reasoning_effort 优先于模型配置，其他扩展只记录忽略数量。建议隔离测试会话中先验证 wait/reply，再验证延迟工具与图片；真实订阅端是否接受完整 schema 需现场确认。
 
 ## 写入模型库（手动触发）
 
@@ -47,7 +51,7 @@ python scripts/login.py --data-dir PRIVATE_DIR smoke --model ACTUAL_MODEL_SLUG -
 
 - `login --no-browser` 仅供本人在同一桌面的浏览器手动打开打印的授权 URL；不是设备码或远程回调。普通登录不打印 URL。只在官方页面同意授权。不同主机按 [转移步骤](docs/docker.md) 办理。
 - `doctor` 默认仅本地，`doctor --online` 另核对官方 discovery。`models` 只列当前账号返回的可见名称与 slug，没有内置模型。不要把 synthetic 测试模型当账号模型。
-- `config` 只输出 TOML，不改 Host 文件。先备份**实际**模型目录与任务配置，再人工合并；保留原 version、任务映射与其他模型，先绑定只需纯文本的私有测试任务。不要绑定 Planner 或视觉任务。默认 Host timeout 200 秒、max_retry 1（基线含首次），插件总预算 180 秒、并发 1、缓冲 1 MiB。
+- `config` 只输出 TOML，不改 Host 文件。先备份**实际**模型目录与任务配置，再人工合并；保留原 version、任务映射与其他模型，先绑定只需纯文本的私有测试任务。验证 planner 时请使用隔离会话，勿直接在正式群聊做回放。默认 Host timeout 200 秒、max_retry 1（基线含首次），插件总预算 180 秒、并发 1、缓冲 1 MiB。
 - `smoke` 会使用本人订阅额度；只用于短人工测试，不要在命令行放真实聊天。CLI 成功不等于 Runner 成功。
 - `import-credentials --from-file PRIVATE_TRANSFER_FILE` 只用于本人停止使用的受信本地会话副本，不能用于不可信 JSON。同目录不换账号。`resume` 只解除本地暂停，不保证额度已恢复。`logout` 尝试官方撤销、清空本地 token 并保留注册和 host identity。不要在移交后的源端登出。
 

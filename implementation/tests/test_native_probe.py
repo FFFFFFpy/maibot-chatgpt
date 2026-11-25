@@ -118,20 +118,14 @@ def test_native_lightning(tmp_path, visual, case):
     assert len(seen) == 1
 
 
-@pytest.mark.parametrize(
-    "case", ["other", "two", "changed-schema", "unknown-image", "image-alone"]
-)
-def test_not_general_tool_or_image_support(case):
+@pytest.mark.parametrize("case", ["two", "changed-schema", "unknown-image"])
+def test_native_tool_contract_stays_strict(case):
     q = request(True)
-    if case == "other":
-        q["tool_options"][0]["function"]["name"] = "another_tool"
     if case == "two":
         q["tool_options"] *= 2
     if case == "changed-schema":
         del q["tool_options"][0]["function"]["parameters"]["properties"]["echo"]
     if case == "unknown-image":
         q["context_items"][0]["parts"][-1]["image_base64"] = "AAAA"
-    if case == "image-alone":
-        del q["tool_options"]
     with pytest.raises(Error, match="unsupported_input"):
         adapt("response", q)

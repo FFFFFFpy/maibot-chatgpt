@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import re
 import time
 from dataclasses import dataclass
 import httpx
@@ -10,6 +11,7 @@ from .adapter import adapt
 from .errors import Error, classify
 from .oauth import RESOURCE, text
 from .responses import StreamError, consume
+from .model_probe import NAME as PROBE_NAME
 
 
 @dataclass(frozen=True)
@@ -94,9 +96,32 @@ class Provider:
                     **({"json": body} if body is not None else {}),
                 ) as r:
                     if r.status_code != 200:
-                        raise classify(
-                            r.status_code, await bounded_json(r, 32768), r.headers
+                        problem = await bounded_json(r, 32768)
+                        # Use only a whitelisted param path, never echo raw upstream messages.
+                        err = (
+                            problem.get("error") if isinstance(problem, dict) else None
                         )
+                        param = err.get("param") if isinstance(err, dict) else None
+                        match = (
+                            re.fullmatch(
+                                r"tools(?:\[(\d{1,3})\]|\.(\d{1,3}))\.parameters(?:\.(not))?",
+                                param,
+                            )
+                            if isinstance(param, str)
+                            else None
+                        )
+                        if r.status_code == 400 and body and match:
+                            idx = int(match[1] or match[2])
+                            tools = body.get("tools", [])
+                            if idx < len(tools) and tools[idx]["name"] == "schedule":
+                                raise Error(
+                                    "schedule_not_rejected"
+                                    if match[3]
+                                    else "schedule_schema_rejected",
+                                    status=400,
+                                    request_id=r.headers.get("x-request-id"),
+                                )
+                        raise classify(r.status_code, problem, r.headers)
                     if body is None:
                         return catalog(await bounded_json(r, 1048576))
                     started = True
@@ -109,17 +134,25 @@ class Provider:
                         raise StreamError(
                             "HTTP 200，但返回内容不是 text/event-stream。请检查出口代理是否改写响应。"
                         )
+                    names = (
+                        {t["name"] for t in body.get("tools", [])}
+                        if body.get("tool_choice") != "none"
+                        else set()
+                    )
                     probe_image = (
                         any(
                             part["type"] == "input_image"
                             for msg in body["input"]
-                            for part in msg["content"]
+                            for part in msg.get("content", [])
                         )
-                        if body.get("tools")
+                        if names == {PROBE_NAME}
                         else None
                     )
                     return await consume(
-                        r, self.cfg.max_buffered_text_bytes, probe_image
+                        r,
+                        self.cfg.max_buffered_text_bytes,
+                        probe_image,
+                        names if probe_image is None else (),
                     )
         except httpx.TimeoutException:
             error = (
