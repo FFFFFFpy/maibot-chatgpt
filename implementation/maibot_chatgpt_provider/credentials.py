@@ -18,6 +18,55 @@ ISSUER = "https://auth.openai.com"
 DIRECT = "chatgpt.tokens.use.direct"
 
 
+class StorageError(Error):
+    """Expose only fixed diagnostics, never paths, raw OS errors or file contents."""
+
+    def __init__(self, reason):
+        super().__init__("storage_failed")
+        self.hint = {
+            "directory": "插件专用 data_dir 权限不合适。请确认它归 Runner 用户所有且为 0700；不要改 plugins 安装目录或整个卷。",
+            "access": "Runner 无权读写插件专用 data_dir 或其文件。请检查挂载属主与 Runner UID/GID。",
+            "readonly": "插件数据卷是只读的。请把专用 data_dir 挂载为可读写，再重试。",
+            "space": "插件数据卷没有可用空间或已超出配额。请释放空间再重试。",
+            "file_mode": "私有身份或凭据文件权限不合适；Unix 要求文件为 0600。不要删除凭据或更改整个卷。",
+            "format": "身份或凭据文件损坏、超限或版本不兼容。请先私下备份，不要把文件内容发到聊天。",
+            "io": "无法读写插件数据。请检查实际 data_dir 的挂载及存储状态，再重试。",
+        }[reason]
+        self.args = (f"[chatgpt_subscription:storage_failed] {self.hint}",)
+
+
+def storage_io(exc):
+    if exc.errno == errno.EROFS:
+        return StorageError("readonly")
+    if exc.errno in (errno.EACCES, errno.EPERM):
+        return StorageError("access")
+    if exc.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", -1)):
+        return StorageError("space")
+    return StorageError("io")
+
+
+def protect_directory(path, runner_owned):
+    if os.name == "nt":
+        return
+    mode = path.stat().st_mode
+    if not mode & 0o077:
+        return
+    if not runner_owned:
+        raise StorageError("directory")
+    # Only the SDK-assigned plugin directory may be tightened, never a CLI-supplied
+    # path, its parent, a symlink, another user's directory or an untrusted writable one.
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        current = os.fstat(fd)
+        if current.st_uid != os.geteuid() or current.st_mode & 0o022:
+            raise StorageError("directory")
+        os.fchmod(fd, 0o700)
+        if stat.S_IMODE(os.fstat(fd).st_mode) != 0o700:
+            raise StorageError("directory")
+    finally:
+        os.close(fd)
+
+
 def stamp(seconds=None):
     return datetime.fromtimestamp(
         time.time() if seconds is None else seconds, timezone.utc
@@ -90,14 +139,14 @@ def validate(d):
     except (KeyError, ValueError, TypeError, AttributeError):
         valid = False
     if not valid:
-        raise Error("storage_failed")
+        raise StorageError("format")
     return d
 
 
 def read_json(path, *, optional=False):
     try:
         if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) != 0o600:
-            raise Error("storage_failed")
+            raise StorageError("file_mode")
         with path.open("rb") as f:
             raw = f.read(2**20 + 1)
         if len(raw) <= 2**20:
@@ -107,9 +156,14 @@ def read_json(path, *, optional=False):
     except FileNotFoundError:
         if optional:
             return None
-    except (ValueError, OSError, RecursionError):
-        pass
-    raise Error("storage_failed")
+        failure = StorageError("io")
+    except OSError as exc:
+        failure = storage_io(exc)
+    except (ValueError, RecursionError):
+        failure = StorageError("format")
+    else:
+        raise StorageError("format")
+    raise failure
 
 
 def atomic(path, data):
@@ -123,19 +177,22 @@ def atomic(path, data):
         os.replace(tmp, path)
         tmp = None
         return
-    except (OSError, ValueError, TypeError):
-        pass
+    except OSError as exc:
+        failure = storage_io(exc)
+    except (ValueError, TypeError):
+        failure = StorageError("format")
     finally:
         if tmp:
             try:
                 os.unlink(tmp)
             except OSError:
                 pass
-    raise Error("storage_failed")
+    raise failure
 
 
 class Store:
-    def __init__(self, directory, timeout=30):
+    def __init__(self, directory, timeout=30, *, runner_owned=False):
+        self.runner_owned = runner_owned
         self.directory = Path(directory)
         self.timeout = timeout
         self.path = self.directory / "credentials.json"
@@ -144,18 +201,18 @@ class Store:
     def lock(self):
         try:
             self.directory.mkdir(parents=True, mode=0o700, exist_ok=True)
-            if os.name != "nt" and stat.S_IMODE(self.directory.stat().st_mode) & 0o077:
-                raise Error("storage_failed")
+            protect_directory(self.directory, self.runner_owned)
             f = os.fdopen(
                 os.open(
                     self.directory / "credentials.lock", os.O_RDWR | os.O_CREAT, 0o600
                 ),
                 "r+b",
             )
-        except OSError:
+        except OSError as exc:
+            failure = storage_io(exc)
             f = None
         if f is None:
-            raise Error("storage_failed")
+            raise failure
         with f:
             deadline = time.monotonic() + self.timeout
             while True:
@@ -196,7 +253,7 @@ class Store:
         except (KeyError, ValueError, TypeError, AttributeError):
             ok = False
         if not ok:
-            raise Error("storage_failed")
+            raise StorageError("format")
         return d["ext_agent_host_id"]
 
     def current(self):

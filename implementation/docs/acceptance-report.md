@@ -1,5 +1,11 @@
 # MaiBot ChatGPT Subscription Provider · 验收记录
 
+## v0.1.3 · 首次连接的存储初始化
+
+[修复包](../artifacts/maibot-chatgpt-provider-v0.1.3-web-login-preview.zip)：当 Runner 预先创建专用目录（如 0755）时，仅对 Runner 自有、其他用户不可写的该目录收紧权限；保留严格文件权限与旧凭据。页面区分只读卷、访问被拒、权限过宽、空间不足和格式错误，不输出原始异常或文件内容。目标容器截图未指明具体原因。
+
+Windows 离线 161 passed，真实 POSIX 权限测试跳过 1，live 排除 1。权限策略分支已模拟；目标卷未实测。HTTP Chromium 合成配对到已连接、ZIP 冷装及严格目录校验均通过。
+
 ## v0.1.2 · 管理页支持 HTTP
 
 [测试包](../artifacts/maibot-chatgpt-provider-v0.1.2-web-login-preview.zip)：局域网 HTTP 管理页不再阻断授权，只显示明文提示；官方 OAuth、token 和推理端点保持 HTTPS。Chromium 在合成非回环 HTTP 父页面中完成配对、回执上传和状态更新；未使用目标管理口令或真实订阅。冻结离线回归 152 passed、1 live deselected；ZIP 冷装及严格目录校验通过。

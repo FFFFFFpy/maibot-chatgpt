@@ -1,4 +1,4 @@
-# MaiBot ChatGPT Subscription Provider · v0.1.2 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.1.3 开发预览
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起纯文本请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。工具、图像、音频、Embedding、结构化输出不在 P0；跨供应商回退归 Host。
 

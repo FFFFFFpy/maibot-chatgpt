@@ -137,19 +137,25 @@ class PageLogin:
         self.clear()
         self.phase = "failed"
         self.problem = (
-            MESSAGES[exc.category]
+            getattr(exc, "hint", MESSAGES[exc.category])
             if isinstance(exc, Error)
             else "无法开始或完成授权；请检查网络、证书或本机 1455 端口。"
         )
 
     async def status(self):
-        data = await asyncio.to_thread(self.manager.store.current)
+        problem = self.problem
+        try:
+            data = await asyncio.to_thread(self.manager.store.current)
+            session = data["state"] if data else "not_connected"
+        except Error as exc:
+            session = "unreadable"
+            problem = getattr(exc, "hint", MESSAGES[exc.category])
         return {
             "phase": self.phase,
-            "problem": self.problem,
+            "problem": problem,
             "material": self.bundle,
             "attempt": self.attempt,
-            "session": data["state"] if data else "not_connected",
+            "session": session,
         }
 
     async def finish(self, envelope):

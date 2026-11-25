@@ -64,7 +64,7 @@ class Plugin(MaiBotPlugin):
         if c.oauth_http_timeout_seconds >= c.lock_timeout_seconds:
             raise Error("invalid_config")
         manager = TokenManager(
-            Store(self.ctx.paths.data_dir, c.lock_timeout_seconds),
+            Store(self.ctx.paths.data_dir, c.lock_timeout_seconds, runner_owned=True),
             OAuth(timeout=c.oauth_http_timeout_seconds),
             c.expiry_safety_margin_seconds,
         )
@@ -120,7 +120,7 @@ class Plugin(MaiBotPlugin):
     async def connection_cancel(self, attempt: str):
         return await self.web_login.cancel(attempt)
 
-    @LLMProvider("maibot.chatgpt.subscription", version="0.1.2")
+    @LLMProvider("maibot.chatgpt.subscription", version="0.1.3")
     async def handle_llm(self, operation: str, request: dict) -> dict:
         if not self.engine:
             raise Error("temporarily_unavailable")
