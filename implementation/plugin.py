@@ -26,7 +26,9 @@ class Request(PluginConfigBase):
     connect_timeout_seconds: int = Field(default=10, ge=1, le=120)
     read_idle_timeout_seconds: int = Field(default=90, ge=1, le=600)
     total_timeout_seconds: int = Field(default=180, ge=1, le=900)
-    max_concurrent_requests: int = Field(default=1, ge=1, le=8)
+    max_concurrent_requests: int = Field(
+        default=Settings.max_concurrent_requests, ge=1, le=8
+    )
     max_buffered_text_bytes: int = Field(default=1048576, ge=1024, le=8388608)
     pre_admission_retry_limit: int = Field(default=0, ge=0, le=1)
 
@@ -136,7 +138,7 @@ class Plugin(MaiBotPlugin):
     async def connection_cancel(self, attempt: str):
         return await self.web_login.cancel(attempt)
 
-    @LLMProvider("maibot.chatgpt.subscription", version="0.4.2")
+    @LLMProvider("maibot.chatgpt.subscription", version="0.4.3")
     async def handle_llm(self, operation: str, request: dict) -> dict:
         if not self.engine:
             raise Error("temporarily_unavailable")

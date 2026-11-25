@@ -20,7 +20,7 @@ class Settings:
     connect_timeout_seconds: int = 10
     read_idle_timeout_seconds: int = 90
     total_timeout_seconds: int = 180
-    max_concurrent_requests: int = 1
+    max_concurrent_requests: int = 4
     max_buffered_text_bytes: int = 1048576
     pre_admission_retry_limit: int = 0
     temporary_cooldown_seconds: int = 30
@@ -235,7 +235,7 @@ class Provider:
         if self.closed:
             raise Error("temporarily_unavailable")
         if len(self.tasks) >= 2 * cfg.max_concurrent_requests:
-            raise Error("rate_limited")
+            raise Error("local_queue_full")
         self.tasks.add(task)
         deadline = time.monotonic() + cfg.total_timeout_seconds
         probe = False

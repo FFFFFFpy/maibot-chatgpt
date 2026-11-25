@@ -64,6 +64,48 @@ def test_QA011_oauth_redirect(tmp_path):
     assert len(seen) == 1
 
 
+def test_default_group_burst_and_local_queue_full(tmp_path):
+    async def go():
+        ready, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+
+        async def upstream(req):
+            nonlocal calls
+            calls += 1
+            if calls == 4:
+                ready.set()
+            await release.wait()
+            return sse(final())
+
+        p = engine(tmp_path, upstream)
+        tasks = []
+        try:
+            tasks.extend(asyncio.create_task(call(p)) for _ in range(8))
+            await asyncio.wait_for(ready.wait(), timeout=5)
+            assert len(p.tasks) == 8 and calls == 4
+            with pytest.raises(Error, match="本地并发队列已满") as caught:
+                await call(p)
+            assert (
+                caught.value.category == "local_queue_full"
+                and caught.value.http_status is None
+                and caught.value.exit_code == 5
+                and p.cool_until == 0
+            )
+            release.set()
+            assert (
+                all(
+                    res["status"] == "completed" for res in await asyncio.gather(*tasks)
+                )
+                and calls == 8
+            )
+        finally:
+            release.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await p.close()
+
+    asyncio.run(go())
+
+
 def test_QA028_concurrent_cooldown(tmp_path):
     async def go():
         gate = asyncio.Event()
@@ -82,8 +124,12 @@ def test_QA028_concurrent_cooldown(tmp_path):
         earlier = asyncio.create_task(call(p))
         await ready.wait()
         try:
-            with pytest.raises(Error, match="rate_limited"):
+            with pytest.raises(Error, match="上游返回 HTTP 429") as caught:
                 await call(p)
+            assert (
+                caught.value.category == "rate_limited"
+                and caught.value.http_status == 429
+            )
             gate.set()
             assert (await earlier)["status"] == "completed"
             with pytest.raises(Error, match="temporarily_unavailable"):

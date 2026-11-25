@@ -210,6 +210,56 @@ def test_tool_result_media(case):
             adapt("response", r)
 
 
+def test_foreign_reasoning_not_sent_or_used_in_history_ids(tmp_path, caplog):
+    r = smoke_request("synthetic", "one")
+    r["context_items"].extend(
+        [
+            dict(
+                item_type="FunctionCallItem",
+                tool_call=dict(
+                    call_id="old", func_name="previous_tool", args={"q": "ok"}
+                ),
+            ),
+            dict(
+                item_type="FunctionCallOutputItem",
+                call_id="old",
+                tool_name="previous_tool",
+                output="ok",
+            ),
+            dict(
+                item_type="AssistantMessageItem",
+                parts=[dict(type="text", text="answer")],
+            ),
+            *smoke_request("synthetic", "next")["context_items"],
+        ]
+    )
+    expected = adapt("response", r)
+    r["context_items"].insert(
+        1,
+        dict(
+            item_type="ReasoningItem",
+            representation="summary",
+            summary_parts=[CANARY],
+            text_parts=[CANARY],
+        ),
+    )
+
+    def upstream(req):
+        assert (
+            json.loads(req.content) == expected and CANARY.encode() not in req.content
+        )
+        return sse(ev("response.completed", response=response()))
+
+    assert (
+        run(engine(tmp_path, upstream), lambda p: p.dispatch("response", r))["status"]
+        == "completed"
+    )
+    assert CANARY not in caplog.text
+    del r["context_items"][2]  # dropping reasoning must not legalize an orphan result
+    with pytest.raises(Error, match="unsupported_input"):
+        adapt("response", r)
+
+
 def test_not_attribution(tmp_path):
     def reject(_):
         return httpx.Response(

@@ -25,7 +25,8 @@ MESSAGES = {
     "stream_failed": "未收到有效完整回复，部分文本已丢弃。",
     "storage_failed": "检查存储、权限及文件格式；若续期写入失败须重新 login。",
     "storage_busy": "凭据锁等待超时，请稍后重试。",
-    "rate_limited": "请求受限，请稍后重试。",
+    "local_queue_full": "本地并发队列已满，本次请求未发往上游；请稍后重试或调整插件并发设置。",
+    "rate_limited": "上游返回 HTTP 429 限流，请稍后重试。",
     "temporarily_unavailable": "服务暂不可用，请稍后重试。",
     "transport": "网络或 TLS 失败，请检查连接。",
     "upstream": "官方服务未返回有效结果。",
@@ -102,7 +103,12 @@ class Error(Exception):
                 "ineligible",
             ),
             4: ("unsupported_input", "unsupported_request", "route_mismatch"),
-            5: ("usage_paused", "rate_limited", "temporarily_unavailable"),
+            5: (
+                "usage_paused",
+                "local_queue_full",
+                "rate_limited",
+                "temporarily_unavailable",
+            ),
             7: ("storage_failed", "storage_busy"),
         }
         return next((n for n, c in groups.items() if self.category in c), 6)

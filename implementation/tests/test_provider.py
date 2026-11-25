@@ -506,7 +506,8 @@ def test_QA029(tmp_path):
                 else sse(final())
             )
 
-        p = engine(tmp_path, h)
+        # A queued caller must observe the pause before admission; in-flight callers may already be on the wire.
+        p = engine(tmp_path, h, max_concurrent_requests=1)
         failures = await asyncio.gather(call(p), call(p), return_exceptions=True)
         assert all(e.category == "usage_paused" for e in failures) and len(n) == 1
         m = p.manager

@@ -1,4 +1,4 @@
-# MaiBot ChatGPT Subscription Provider · v0.4.2 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.4.3 开发预览
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起文本、函数工具及视觉请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。不执行工具，不提供音频、Embedding 或结构化输出；跨供应商回退归 Host。
 
@@ -57,7 +57,7 @@ python scripts/login.py --data-dir PRIVATE_DIR smoke --model ACTUAL_MODEL_SLUG -
 
 - `login --no-browser` 仅供本人在同一桌面的浏览器手动打开打印的授权 URL；不是设备码或远程回调。普通登录不打印 URL。只在官方页面同意授权。不同主机按 [转移步骤](docs/docker.md) 办理。
 - `doctor` 默认仅本地，`doctor --online` 另核对官方 discovery。`models` 只列当前账号返回的可见名称与 slug，没有内置模型。不要把 synthetic 测试模型当账号模型。
-- `config` 只输出 TOML，不改 Host 文件。先备份**实际**模型目录与任务配置，再人工合并；保留原 version、任务映射与其他模型，先绑定只需纯文本的私有测试任务。验证 planner 时请使用隔离会话，勿直接在正式群聊做回放。默认 Host timeout 200 秒、max_retry 1（基线含首次），插件总预算 180 秒、并发 1、缓冲 1 MiB。
+- `config` 只输出 TOML，不改 Host 文件。先备份**实际**模型目录与任务配置，再人工合并；保留原 version、任务映射与其他模型，先绑定只需纯文本的私有测试任务。验证 planner 时请使用隔离会话，勿直接在正式群聊做回放。默认 Host timeout 200 秒、max_retry 1（基线含首次），插件总预算 180 秒、默认同时执行 4 个请求、另最多等待 4 个，每条响应缓冲 1 MiB。已保存的 `request.max_concurrent_requests` 会覆盖新版默认值；旧实例如仍是 1，可手动改为 4。`local_queue_full` 表示请求未发出；`rate_limited` 表示上游 HTTP 429。切换模型时会跳过历史 `ReasoningItem`，不发送其内容，仍严格校验后续工具结果配对。
 - `smoke` 会使用本人订阅额度；只用于短人工测试，不要在命令行放真实聊天。CLI 成功不等于 Runner 成功。
 - `import-credentials --from-file PRIVATE_TRANSFER_FILE` 只用于本人停止使用的受信本地会话副本，不能用于不可信 JSON。同目录不换账号。`resume` 只解除本地暂停，不保证额度已恢复。`logout` 尝试官方撤销、清空本地 token 并保留注册和 host identity。不要在移交后的源端登出。
 

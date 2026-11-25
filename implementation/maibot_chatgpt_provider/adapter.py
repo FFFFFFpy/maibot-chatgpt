@@ -241,9 +241,12 @@ def adapt(operation, r):
     pending = {}
     budget = [0]
     visual = info.get("visual") is True
-    for index, item in enumerate(items):
+    for item in items:
         require(isinstance(item, dict))
         kind = item.get("item_type")
+        if kind == "ReasoningItem":
+            # Private reasoning from a previous model is neither a message nor tool history.
+            continue
         if kind == "FunctionCallItem":
             c = item.get("tool_call")
             require(isinstance(c, dict))
@@ -293,7 +296,7 @@ def adapt(operation, r):
             seed = (
                 ["host", item_id]
                 if isinstance(item_id, str) and item_id.strip()
-                else ["history", role, index, content, item.get("phase")]
+                else ["history", role, len(messages), content, item.get("phase")]
             )
             msg.update(id="msg_" + digest(seed), status="completed")
             phase = item.get("phase")
@@ -301,7 +304,7 @@ def adapt(operation, r):
                 require(phase in ("commentary", "final_answer"))
                 msg["phase"] = phase
         messages.append(msg)
-    require(not pending)
+    require(messages and not pending)
     body["prompt_cache_key"] = cache_key(r, messages)
     return body
 
