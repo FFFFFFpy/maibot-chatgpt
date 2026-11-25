@@ -8,9 +8,37 @@ from .oauth import text
 from .model_probe import report_item
 
 
-def check(condition):
+# Diagnostics are fixed vocabulary. Never copy arbitrary upstream text or SSE payloads.
+class StreamError(Error):
+    def __init__(self, reason, *, upstream_code=None):
+        super().__init__("stream_failed")
+        allowed = {
+            "invalid_request_error",
+            "server_error",
+            "model_not_found",
+            "unsupported_parameter",
+            "rate_limit_exceeded",
+            "content_filter",
+            "max_output_tokens",
+            "invalid_image",
+            "invalid_image_format",
+            "invalid_image_size",
+            "image_too_small",
+            "unsupported_value",
+            "invalid_value",
+            "insufficient_quota",
+        }
+        suffix = (
+            "；官方分类：" + upstream_code
+            if isinstance(upstream_code, str) and upstream_code in allowed
+            else ""
+        )
+        self.args = (f"[chatgpt_subscription:stream_failed] {reason}{suffix}",)
+
+
+def check(condition, reason="完成事件的输出结构不符合预期，未交付结果。"):
     if not condition:
-        raise Error("stream_failed")
+        raise StreamError(reason)
 
 
 def completed(r, probe_image=None):
@@ -20,11 +48,11 @@ def completed(r, probe_image=None):
         and not r.get("error")
         and not r.get("incomplete_details")
     )
-    check(isinstance(r.get("output"), list))
+    check(isinstance(r.get("output"), list), "完成事件未包含有效的 output 列表。")
     items = []
     reported = False
     for message in r["output"]:
-        check(isinstance(message, dict))
+        check(isinstance(message, dict), "完成事件的输出项格式无效。")
         if probe_image is not None and message.get("type") == "function_call":
             check(not reported)
             items.append(report_item(message, probe_image))
@@ -36,7 +64,8 @@ def completed(r, probe_image=None):
             message.get("type") == "message"
             and message.get("role") == "assistant"
             and message.get("status", "completed") == "completed"
-            and isinstance(message.get("content"), list)
+            and isinstance(message.get("content"), list),
+            "完成事件含不支持的输出项、角色或未完成消息。",
         )
         parts = []
         for p in message["content"]:
@@ -51,7 +80,11 @@ def completed(r, probe_image=None):
             )
             check(key and isinstance(p.get(key), str))
             parts.append({"type": key, key: p[key]})
-        check(any(p[p["type"]].strip() for p in parts))
+        if not any(p[p["type"]].strip() for p in parts):
+            # A tool-only turn may have an empty assistant message alongside the real call.
+            if probe_image is not None:
+                continue
+            raise StreamError("完成事件里没有非空正文或拒答。")
         item = dict(item_type="AssistantMessageItem", parts=parts)
         if message.get("phase") in ("commentary", "final_answer"):
             item["phase"] = message["phase"]
@@ -84,7 +117,7 @@ async def limited(response, limit):
     size = 0
     async for chunk in response.aiter_bytes():
         size += len(chunk)
-        check(size <= limit)
+        check(size <= limit, "事件流超出插件缓冲上限，已停止读取。")
         yield chunk
 
 
@@ -127,21 +160,39 @@ async def events(response, limit):
 
 
 async def consume(response, limit, probe_image=None):
+    saw_events = False
     async for event, payload in events(response, limit):
         if payload == "[DONE]":
-            break
+            raise StreamError("收到 [DONE]，但没有官方完成事件。")
+        saw_events = True
         data = json.loads(payload)
         check(isinstance(data, dict))
         typ = data.get("type")
-        check(isinstance(typ, str) and (not event or event == typ))
+        check(
+            isinstance(typ, str) and (not event or event == typ),
+            "事件类型缺失或与 SSE 标记不一致。",
+        )
         if typ == "response.completed":
             return completed(data.get("response"), probe_image)
         if typ in ("response.failed", "error"):
-            raise classify(
-                200, data.get("response", data), response.headers, stream=True
+            body = data.get("response", data)
+            failure = classify(200, body, response.headers, stream=True)
+            if failure.category != "stream_failed":
+                raise failure
+            error = body.get("error", body) if isinstance(body, dict) else {}
+            raise StreamError(
+                "官方通过 SSE 返回失败事件，未收到成功结果。",
+                upstream_code=error.get("code") if isinstance(error, dict) else None,
             )
         if typ == "response.incomplete":
-            break
+            obj = data.get("response")
+            detail = obj.get("incomplete_details") if isinstance(obj, dict) else None
+            raise StreamError(
+                "官方返回 response.incomplete，本次生成没有完成。",
+                upstream_code=detail.get("reason")
+                if isinstance(detail, dict)
+                else None,
+            )
         if typ in ("response.output_item.added", "response.output_item.done"):
             item = data.get("item")
             check(
@@ -149,6 +200,11 @@ async def consume(response, limit, probe_image=None):
                 and (
                     item.get("type") in ("message", "reasoning")
                     or (probe_image is not None and item.get("type") == "function_call")
-                )
+                ),
+                "事件流包含本次请求不支持的输出项类型。",
             )
-    raise Error("stream_failed")
+    raise StreamError(
+        "事件流提前结束：未收到 response.completed。"
+        if saw_events
+        else "响应结束但未收到完整 SSE 事件。"
+    )

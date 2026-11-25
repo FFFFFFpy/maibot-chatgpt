@@ -9,7 +9,7 @@ from .wire import private_wire, network_client
 from .adapter import adapt
 from .errors import Error, classify
 from .oauth import RESOURCE, text
-from .responses import consume
+from .responses import StreamError, consume
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,9 @@ class Provider:
                         .lower()
                         != "text/event-stream"
                     ):
-                        raise Error("stream_failed")
+                        raise StreamError(
+                            "HTTP 200，但返回内容不是 text/event-stream。请检查出口代理是否改写响应。"
+                        )
                     probe_image = (
                         any(
                             part["type"] == "input_image"
@@ -120,14 +122,28 @@ class Provider:
                     return await consume(
                         r, self.cfg.max_buffered_text_bytes, probe_image
                     )
+        except httpx.TimeoutException:
+            error = (
+                StreamError("接收官方事件流时超时，未交付部分结果。")
+                if started
+                else Error("transport")
+            )
         except (
             httpx.HTTPError,
             ValueError,
             TypeError,
             RecursionError,
             UnicodeError,
-        ):
-            error = Error("stream_failed" if started else "transport")
+        ) as exc:
+            error = (
+                StreamError(
+                    "读取事件流时连接中断。"
+                    if isinstance(exc, httpx.HTTPError)
+                    else "事件流编码或 JSON 格式无效，未交付结果。"
+                )
+                if started
+                else Error("transport")
+            )
         raise error
 
     async def _run(self, body):
