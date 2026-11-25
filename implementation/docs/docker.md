@@ -14,9 +14,9 @@ docker exec CONTAINER RUNNER_PYTHON -c 'import sys,importlib.metadata as m;print
 
 记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/local.maibot.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。v0.1.3 起，若 Host 预建的插件专用 data_dir 是 Runner 所有且仅对其他用户开放读取/遍历（如 0755），插件在首次加锁时仅将该目录收紧到 0700；不会递归改权限、修改父目录、接管其他用户目录或改动 CLI 指定的路径。卷只读、UID/GID 不匹配或凭据文件损坏时，页面会给出相应提示。Windows 必须自己核验 DACL。插件按官方 HTTPS 目标选取 HTTPS_PROXY（或 ALL_PROXY），尊重 NO_PROXY；只有 HTTP_PROXY 不代表 HTTPS 流量也应走代理。显式加载 SSL_CERT_FILE / SSL_CERT_DIR，二者均未设置时可用 REQUESTS_CA_BUNDLE。请在实际 Runner 与 CLI 各自的环境设置可信代理和 CA，不要在聊天、日志或插件配置中填写代理密码。保持证书及主机名校验，不跟随重定向，不继承 OpenAI 账号相关环境头。
 
-### 配对串未出现，提示网络或 TLS 失败
+### 官方授权链接未出现，提示网络或 TLS 失败
 
-请求由 **Runner** 发出，不由管理页或桌面助手发出。在 Runner 容器内，以相同用户、解释器及代理/CA 环境进入已解压插件目录，运行以下匿名探针。它只向官方 discovery 发 GET，不读写凭据，不跟随重定向；v0.1.4 会报告脱敏分类和非 200 状态码：
+请求由 **Runner** 发出，不由桌面浏览器发出。在 Runner 容器内，以相同用户、解释器及代理/CA 环境进入已解压插件目录，运行以下匿名探针。它只向官方 discovery 发 GET，不读写凭据，不跟随重定向；v0.1.4 会报告脱敏分类和非 200 状态码：
 
 ~~~sh
 python -c "from maibot_chatgpt_provider.oauth import OAuth; OAuth().discover(); print('discovery OK')"
@@ -33,7 +33,7 @@ python scripts/login.py --data-dir TARGET_PRIVATE_DIR init-host
 python scripts/login.py --data-dir TARGET_PRIVATE_DIR doctor
 ~~~
 
-推荐从插件扩展「订阅连接」选择「不同设备 / Docker」，按 [页面登录步骤](../README.md) 用桌面回调助手提交一次性加密回执，不传 credentials.json、不暴露容器回调端口。管理页也支持局域网 HTTP，无需额外配置隧道；HTTP 不保护管理会话，请仅在可信网络使用。以下是独立 CLI 登录的备选路线，不是页面登录前置：
+推荐直接在「订阅连接」点击「使用 ChatGPT 继续」，按 [页面登录步骤](../README.md) 操作。同机自动返回；远端可将浏览器返回地址交回本插件，不暴露容器端口。以下是管理员的 CLI 备选路线，不是用户登录的准备工作。
 
 1. 桌面用相同版本、另一个本地私有目录执行 login。不要拷贝 host_identity.json。
 2. 停止桌面所有使用或刷新会话的进程。只通过私人加密通道传 credentials.json 至目标的临时私有文件。避免公开共享目录；Unix 先 umask 077，导入前 chmod 600。不传到聊天或工单。

@@ -78,7 +78,7 @@ class Plugin(MaiBotPlugin):
 
     async def on_load(self):
         self.engine = self.build(Config.model_validate(self.get_plugin_config_data()))
-        self.web_login = PageLogin(self.engine.manager)
+        self.web_login = PageLogin(self.engine.manager, self.engine.models)
 
     async def on_config_update(self, scope, config_data, version):
         if scope != CONFIG_RELOAD_SCOPE_SELF or self.engine is None:
@@ -93,7 +93,7 @@ class Plugin(MaiBotPlugin):
         old = self.engine
         await self.web_login.close()
         self.engine = new
-        self.web_login = PageLogin(new.manager)
+        self.web_login = PageLogin(new.manager, new.models)
         await old.close()
 
     async def on_unload(self):
@@ -109,18 +109,26 @@ class Plugin(MaiBotPlugin):
         return await self.web_login.status()
 
     @API("connection_start", version="1", description="开始订阅授权")
-    async def connection_start(self, mode: str):
-        return await self.web_login.start(mode)
+    async def connection_start(self):
+        return await self.web_login.start()
 
-    @API("connection_finish", version="1", description="验证一次性加密回执")
-    async def connection_finish(self, envelope: str):
-        return await self.web_login.finish(envelope)
+    @API("connection_finish", version="1", description="验证官方登录返回地址")
+    async def connection_finish(self, callback_url: str):
+        return await self.web_login.finish(callback_url)
+
+    @API("connection_models", version="1", description="刷新订阅账号可用模型")
+    async def connection_models(self):
+        return await self.web_login.models()
+
+    @API("connection_logout", version="1", description="退出当前订阅账号")
+    async def connection_logout(self):
+        return await self.web_login.logout()
 
     @API("connection_cancel", version="1", description="取消未完成授权")
     async def connection_cancel(self, attempt: str):
         return await self.web_login.cancel(attempt)
 
-    @LLMProvider("maibot.chatgpt.subscription", version="0.1.4")
+    @LLMProvider("maibot.chatgpt.subscription", version="0.2.0")
     async def handle_llm(self, operation: str, request: dict) -> dict:
         if not self.engine:
             raise Error("temporarily_unavailable")

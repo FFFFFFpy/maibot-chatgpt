@@ -1,5 +1,11 @@
 # MaiBot ChatGPT Subscription Provider · 验收记录
 
+## v0.2.0 · 单 ZIP 浏览器登录
+
+[插件包](../artifacts/maibot-chatgpt-provider-v0.2.0-web-login-preview.zip) 已移除桌面助手，25 个白名单文件，SHA-256：a9425b0493706a5be0450198d4d975311b6f8319db674cdd8227c767dcc44545。未修改 MaiBot 核心。同机自动接收和远端粘贴精确返回地址共用一次消费入口；账号/模型/退出页不返回 token。
+
+[离线回归](../artifacts/account-page-results.xml)：173 passed、1 POSIX 测试在 Windows 跳过、1 live 排除。Chromium 加载基线 Host 的 iframe 桥脚本，在模拟管理 RPC 与官方上游下验证 HTTP 管理页的完整两种登录路径、模型与退出。ZIP 冷装、严格目录校验与字节级重打包通过。未在用户账号或目标实例执行。以下是旧版历史记录。
+
 ## v0.1.3 · 首次连接的存储初始化
 
 [修复包](../artifacts/maibot-chatgpt-provider-v0.1.3-web-login-preview.zip)：当 Runner 预先创建专用目录（如 0755）时，仅对 Runner 自有、其他用户不可写的该目录收紧权限；保留严格文件权限与旧凭据。页面区分只读卷、访问被拒、权限过宽、空间不足和格式错误，不输出原始异常或文件内容。目标容器截图未指明具体原因。

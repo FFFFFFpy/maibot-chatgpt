@@ -288,6 +288,19 @@ class OAuth:
                 display_label="acct-"
                 + hashlib.sha256(claims["sub"].encode()).hexdigest()[:8],
             )
+            email = claims.get("email")
+            if (
+                claims.get("email_verified") is True
+                and isinstance(email, str)
+                and 3 <= len(email) <= 254
+                and "@" in email
+                and email.isprintable()
+            ):
+                reg["display_label"] = email
+            elif old:
+                reg["display_label"] = old["registration"].get(
+                    "display_label", reg["display_label"]
+                )
         now = time.time()
         granted = scopes.split()
         return dict(
@@ -403,7 +416,14 @@ async def exchange(store, oauth, generation, issued, code, verifier, redirect, n
 
 
 async def login(
-    store, oauth, opener=webbrowser.open, timeout=180, *, port=0, on_exchange=None
+    store,
+    oauth,
+    opener=webbrowser.open,
+    timeout=180,
+    *,
+    port=0,
+    page_ready=None,
+    on_exchange=None,
 ):
     host, old = await asyncio.to_thread(store.begin)
     generation = old["session_generation"] if old else 0
@@ -413,6 +433,35 @@ async def login(
     loop = asyncio.get_running_loop()
     answer = loop.create_future()
     handlers = set()
+
+    # Both the local listener and the authenticated page action use this one-shot gate.
+    def accept_url(raw):
+        if answer.done() or not isinstance(raw, str) or not 1 <= len(raw) <= 12000:
+            return False
+        if not raw.isascii() or any(ord(c) < 33 or ord(c) == 127 for c in raw):
+            return False
+        if raw.partition("?")[0] != redirect or "#" in raw:
+            return False
+        try:
+            args = parse_qs(
+                raw.partition("?")[2],
+                keep_blank_values=True,
+                max_num_fields=20,
+                strict_parsing=True,
+            )
+            if len(args.get("state", [])) != 1 or not hmac.compare_digest(
+                args["state"][0], state
+            ):
+                return False
+            pair = callback_pair(args, client)
+        except (TypeError, ValueError):
+            return False
+        if not pair and "error" not in args:
+            return False
+        answer.set_result(pair)
+        if on_exchange:
+            on_exchange()
+        return True
 
     async def callback(reader, writer):
         job = asyncio.current_task()
@@ -429,6 +478,21 @@ async def login(
                 or u.scheme
                 or answer.done()
             ):
+                return
+            if page_ready is not None:
+                hosts = [
+                    v.strip()
+                    for line in raw.split(b"\r\n")[1:]
+                    for k, sep, v in [line.partition(b":")]
+                    if sep and k.lower() == b"host"
+                ]
+                if hosts != [urlsplit(redirect).netloc.encode("ascii")]:
+                    return
+                ok = (
+                    accept_url(redirect + "?" + u.query)
+                    if target.startswith("/auth/callback?") and "#" not in target
+                    else False
+                )
                 return
             args = parse_qs(u.query, keep_blank_values=True, max_num_fields=20)
             if len(args.get("state", [])) != 1 or not hmac.compare_digest(
@@ -452,10 +516,16 @@ async def login(
             pass
         finally:
             try:
+                body = (
+                    "已收到登录返回地址。请关闭此标签页，回到 MaiBot 查看结果。"
+                    if ok
+                    else "这个登录地址无效或已过期，请回到 MaiBot 重新开始。"
+                ).encode()
                 writer.write(
                     b"HTTP/1.1 "
                     + (b"200 OK" if ok else b"400 Bad Request")
-                    + b"\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\nReturn to MaiBot to check the connection."
+                    + b"\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\n"
+                    + body
                 )
                 await writer.drain()
             except (ConnectionError, OSError):
@@ -469,7 +539,9 @@ async def login(
     url = authorize_url(host, client, old, state, nonce, challenge, redirect)
     try:
         async with asyncio.timeout(timeout):
-            if await asyncio.to_thread(opener, url) is False:
+            if page_ready is not None:
+                page_ready(url, accept_url)
+            elif await asyncio.to_thread(opener, url) is False:
                 raise Error("invalid_login")
             pair = await answer
     except TimeoutError:
@@ -484,6 +556,4 @@ async def login(
     if not pair:
         raise Error("invalid_login")
     issued, code = pair
-    if on_exchange:
-        on_exchange()
     await exchange(store, oauth, generation, issued, code, verifier, redirect, nonce)
