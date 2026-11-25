@@ -120,7 +120,7 @@ class Plugin(MaiBotPlugin):
     async def connection_cancel(self, attempt: str):
         return await self.web_login.cancel(attempt)
 
-    @LLMProvider("maibot.chatgpt.subscription", version="0.1.3")
+    @LLMProvider("maibot.chatgpt.subscription", version="0.1.4")
     async def handle_llm(self, operation: str, request: dict) -> dict:
         if not self.engine:
             raise Error("temporarily_unavailable")

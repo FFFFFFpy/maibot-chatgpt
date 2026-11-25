@@ -14,6 +14,16 @@ docker exec CONTAINER RUNNER_PYTHON -c 'import sys,importlib.metadata as m;print
 
 记录镜像/Host 版本与 SDK，脱敏核对共享 host/、Bot 实例 / 插件目录、**实际 ctx.paths.data_dir**、卷与 Runner UID/GID。源码基线推导为 PROJECT_ROOT/data/plugins/local.maibot.chatgpt_subscription，必须运行时确认，不是固定容器路径。未持久化先停止接入。使用本地文件系统 bind/volume，不支持多机共享 NFS/SMB。Unix 将该专用数据目录置 0700，凭据文件 0600，属主为运行插件的用户；不要 chmod 整个卷。v0.1.3 起，若 Host 预建的插件专用 data_dir 是 Runner 所有且仅对其他用户开放读取/遍历（如 0755），插件在首次加锁时仅将该目录收紧到 0700；不会递归改权限、修改父目录、接管其他用户目录或改动 CLI 指定的路径。卷只读、UID/GID 不匹配或凭据文件损坏时，页面会给出相应提示。Windows 必须自己核验 DACL。插件按官方 HTTPS 目标选取 HTTPS_PROXY（或 ALL_PROXY），尊重 NO_PROXY；只有 HTTP_PROXY 不代表 HTTPS 流量也应走代理。显式加载 SSL_CERT_FILE / SSL_CERT_DIR，二者均未设置时可用 REQUESTS_CA_BUNDLE。请在实际 Runner 与 CLI 各自的环境设置可信代理和 CA，不要在聊天、日志或插件配置中填写代理密码。保持证书及主机名校验，不跟随重定向，不继承 OpenAI 账号相关环境头。
 
+### 配对串未出现，提示网络或 TLS 失败
+
+请求由 **Runner** 发出，不由管理页或桌面助手发出。在 Runner 容器内，以相同用户、解释器及代理/CA 环境进入已解压插件目录，运行以下匿名探针。它只向官方 discovery 发 GET，不读写凭据，不跟随重定向；v0.1.4 会报告脱敏分类和非 200 状态码：
+
+~~~sh
+python -c "from maibot_chatgpt_provider.oauth import OAuth; OAuth().discover(); print('discovery OK')"
+~~~
+
+若使用宿主机代理，容器内 127.0.0.1 通常不是宿主机；请使用容器可达的受信代理地址。检查 HTTPS_PROXY / ALL_PROXY 及 NO_PROXY 是否符合部署预期。若组织代理使用自签根证书，向 Runner 挂载受信任的 CA 并设置 SSL_CERT_FILE，保持证书及主机名校验。不要粘贴完整环境变量、代理 URL、抓包或凭据。匿名探针成功仅代表 discovery 正常，并非账号已连接。
+
 ## 2 · 安装与迁移
 
 按[README](../README.md)生成纯插件 ZIP 并导入候选；只在同版本测试实例启用，保存原模型配置哈希及私有备份。以 Runner 相同用户与解释器在容器内进入插件目录。在目标实际数据目录先执行：

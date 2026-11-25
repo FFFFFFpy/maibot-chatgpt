@@ -6,6 +6,8 @@ import hashlib
 import hmac
 import json
 import secrets
+import socket
+import ssl
 import time
 from urllib.parse import parse_qs, urlencode, urlsplit
 import webbrowser
@@ -41,6 +43,48 @@ def text(v):
     return isinstance(v, str) and bool(v.strip())
 
 
+def discovery_error(category, detail, status=None):
+    err = Error(category, status=status)
+    err.hint = "Runner 请求 auth.openai.com 的登录配置失败：" + detail
+    err.args = (f"[chatgpt_subscription:{category}] {err.hint}",)
+    return err
+
+
+def discovery_transport(exc):
+    # Never surface exception text, response bodies, proxy URLs or headers.
+    cause = exc
+    for _ in range(12):
+        if isinstance(cause, ssl.SSLCertVerificationError):
+            return discovery_error(
+                "transport",
+                "TLS 证书校验未通过。请检查容器时间、受信 CA 和 SSL_CERT_FILE；不要关闭验证。",
+            )
+        if isinstance(cause, ssl.SSLError):
+            return discovery_error(
+                "transport", "TLS 握手失败。请检查 Runner 出站代理及 TLS 配置。"
+            )
+        if isinstance(cause, socket.gaierror):
+            return discovery_error(
+                "transport", "DNS 解析失败。请检查容器能否解析目标或所配置的代理主机。"
+            )
+        cause = cause.__cause__ or cause.__context__
+        if cause is None:
+            break
+    if isinstance(exc, httpx.ProxyError):
+        return discovery_error(
+            "transport",
+            "代理连接或认证失败。请检查 Runner 的 HTTPS_PROXY / ALL_PROXY。",
+        )
+    if isinstance(exc, httpx.TimeoutException):
+        return discovery_error(
+            "transport", "请求超时。请检查容器的出口、防火墙和代理是否可达。"
+        )
+    return discovery_error(
+        "transport",
+        "未建立或未完成连接。请检查容器到目标的 443 出口、DNS 和代理；桌面浏览器可访问不代表 Runner 可访问。",
+    )
+
+
 class OAuth:
     def __init__(self, transport=None, timeout=20):
         self.transport = transport
@@ -71,8 +115,16 @@ class OAuth:
                 with client.stream(method, url, data=form) as r:
                     buf = bytearray()
                     status = r.status_code
+                    if url == DISCOVERY and status != 200:
+                        raise discovery_error(
+                            "upstream",
+                            f"收到 HTTP {status}，未取得登录配置。请检查出口代理或目标服务是否拒绝请求。",
+                            status,
+                        )
                     for chunk in r.iter_bytes():
-                        if len(buf) + len(chunk) > 2**20 or time.monotonic() > deadline:
+                        if time.monotonic() > deadline:
+                            raise httpx.ReadTimeout("deadline exceeded")
+                        if len(buf) + len(chunk) > 2**20:
                             raise ValueError
                         buf.extend(chunk)
             if url == REVOKE and status == 200:
@@ -89,11 +141,35 @@ class OAuth:
             if code == "invalid_client":
                 raise Error("invalid_client")
             category = "upstream" if not refresh else "refresh_uncertain"
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
-            category = "transport"
-        except (httpx.HTTPError, ValueError, RecursionError):
-            category = "refresh_uncertain" if refresh else "transport"
-        raise Error(category)
+        except Error as exc:
+            if url != DISCOVERY or exc.category != "invalid_config":
+                raise
+            failure = discovery_error(
+                "invalid_config",
+                "Runner 的代理或 CA 配置无法加载。请检查代理协议及 CA 文件路径。",
+            )
+        except httpx.HTTPError as exc:
+            if url == DISCOVERY:
+                failure = discovery_transport(exc)
+            else:
+                before_send = isinstance(
+                    exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+                )
+                failure = Error(
+                    "refresh_uncertain" if refresh and not before_send else "transport"
+                )
+        except (ValueError, RecursionError):
+            failure = (
+                discovery_error(
+                    "upstream",
+                    "返回的不是有效的登录配置，或响应超限。请检查代理是否返回了拦截页。",
+                )
+                if url == DISCOVERY
+                else Error("refresh_uncertain" if refresh else "transport")
+            )
+        else:
+            failure = Error(category)
+        raise failure
 
     def discover(self):
         doc = self.http("GET", DISCOVERY)
