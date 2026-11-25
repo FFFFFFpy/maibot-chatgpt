@@ -2,6 +2,7 @@ import base64
 import binascii
 import json
 import logging
+from itertools import takewhile
 import re
 from hashlib import sha256
 from .errors import Error
@@ -147,8 +148,7 @@ def cache_key(request, messages):
     head = next(
         (
             p["text"][:1024]
-            for m in messages
-            if m.get("role") == "developer"
+            for m in takewhile(lambda x: x.get("role") == "developer", messages)
             for p in m["content"]
             if p.get("text")
         ),
@@ -237,7 +237,6 @@ def adapt(operation, r):
     items = r.get("context_items")
     require(isinstance(items, list) and items)
     messages = body["input"]
-    developers = []
     seen = set()
     pending = {}
     budget = [0]
@@ -288,9 +287,6 @@ def adapt(operation, r):
         require(role)
         content = content_parts(item.get("parts"), role, visual, probe, budget)
         msg = dict(type="message", role=role, content=content)
-        if role == "developer":
-            developers.append(msg)
-            continue
         if role == "assistant":
             meta = item.get("meta")
             item_id = meta.get("item_id") if isinstance(meta, dict) else None
@@ -306,7 +302,6 @@ def adapt(operation, r):
                 msg["phase"] = phase
         messages.append(msg)
     require(not pending)
-    messages[:0] = developers
     body["prompt_cache_key"] = cache_key(r, messages)
     return body
 

@@ -31,6 +31,36 @@ def request(sid=None, anchor="anchor", turn="one", reminder="reminder"):
     return q
 
 
+@pytest.mark.parametrize("leading_system", [True, False])
+def test_late_system_keeps_position_and_prefix(leading_system):
+    q = request()
+    if not leading_system:
+        q["context_items"].pop(0)
+    q["context_items"].append(
+        dict(
+            item_type="AssistantMessageItem", parts=[dict(type="text", text="history")]
+        )
+    )
+    a = adapt("response", q)
+    q["context_items"].append(
+        dict(
+            item_type="SystemMessageItem",
+            parts=[dict(type="text", text="clock"), dict(type="text", text="notice")],
+        )
+    )
+    q["context_items"] += smoke_request("model", "next")["context_items"]
+    b = adapt("response", q)
+    assert (
+        b["input"][:-2] == a["input"] and b["prompt_cache_key"] == a["prompt_cache_key"]
+    )
+    assert b["input"][-2] == dict(
+        type="message",
+        role="developer",
+        content=[dict(type="input_text", text=s) for s in ("clock", "notice")],
+    )
+    assert "instructions" not in b
+
+
 def test_prefix_and_keys():
     q = request()
     history = {

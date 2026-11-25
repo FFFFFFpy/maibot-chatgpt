@@ -1,4 +1,4 @@
-# MaiBot ChatGPT Subscription Provider · v0.4.1 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.4.2 开发预览
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起文本、函数工具及视觉请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。不执行工具，不提供音频、Embedding 或结构化输出；跨供应商回退归 Host。
 
@@ -21,7 +21,7 @@
 
 ## Planner 与动态工具
 
-每轮从宿主快照重新构造函数列表并设置 `strict: false`，不缓存工具、不执行或调度。保留 Schema（包括 schedule 的 not）；若上游拒绝，不擅自删约束重试。所有系统消息按原顺序放在 input 开头，保留每个文本段，不发顶层 instructions。纯工具输出和并行调用均按原 call_id 回传。基线 Host 的工具媒体通常出现在结果后的独立用户消息；保留其 media_index 和图文顺序。视觉关闭时用明确的文字占位，不下载任何图片 URL。请求层 reasoning_effort 优先于模型配置，其他扩展只记录忽略数量。建议隔离测试会话中先验证 wait/reply，再验证延迟工具与图片；真实订阅端是否接受完整 schema 需现场确认。
+每轮从宿主快照重新构造函数列表并设置 `strict: false`，不缓存工具、不执行或调度。保留 Schema（包括 schedule 的 not）；若上游拒绝，不擅自删约束重试。系统消息逐条原位转换成 developer，保留每个文本段；首条仍在开头，中途和尾部提醒不提前，不发顶层 instructions。纯工具输出和并行调用均按原 call_id 回传。基线 Host 的工具媒体通常出现在结果后的独立用户消息；保留其 media_index 和图文顺序。视觉关闭时用明确的文字占位，不下载任何图片 URL。请求层 reasoning_effort 优先于模型配置，其他扩展只记录忽略数量。建议隔离测试会话中先验证 wait/reply，再验证延迟工具与图片；真实订阅端是否接受完整 schema 需现场确认。
 
 ## 观察 Prompt Cache
 

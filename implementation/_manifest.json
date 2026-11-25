@@ -3,7 +3,7 @@
   "id": "local.maibot.chatgpt_subscription",
   "name": "MaiBot ChatGPT Subscription Provider",
   "description": "独立 SIWC 会话；文本、Planner 函数工具与视觉输入",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "author": {
     "name": "Helw",
     "url": "https://github.com/FFFFFFpy"
@@ -41,7 +41,7 @@
   "llm_providers": [
     {
       "client_type": "maibot.chatgpt.subscription",
-      "version": "0.4.1"
+      "version": "0.4.2"
     }
   ],
   "capabilities": [],
