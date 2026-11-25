@@ -1,4 +1,14 @@
-# MaiBot ChatGPT Subscription Provider · v0.1.0 验收报告
+# MaiBot ChatGPT Subscription Provider · 验收记录
+
+## v0.1.1 · 共享 Runner 依赖兼容修订
+
+目标截图确认 v0.1.0 在发现阶段因要求 openai==2.54.0 被拒（宿主已有 3.55.1）。本次移除该包运行依赖，不修改宿主。官方接口、登录页面、流式完成条件保持不变。
+
+- [新版插件 ZIP](../artifacts/maibot-chatgpt-provider-v0.1.1-web-login-preview.zip)：48,415 字节，SHA-256 `1b1590864bafd6f88a3be428e67adfe46cfe89d5178d78886d22408edf9e7bd9`。
+- [无 OpenAI SDK 的冻结环境](../artifacts/compat-0.1.1-results.xml) 和 [安装 openai 3.55.1 的隔离环境](../artifacts/compat-openai-3.55.1-results.xml) 各 152 passed，1 live deselected。
+- ZIP 冷安装、基线严格目录校验与逐字节重打包均通过。目标 Runner 更新后的实际加载和真实账户推理仍待验证。
+
+以下为 v0.1.0 历史验收。
 
 ## 页面登录修订：本次交付
 

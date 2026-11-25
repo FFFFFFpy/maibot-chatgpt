@@ -14,8 +14,8 @@
 
 ### 网络契约与运行限制
 
-公开 discovery（匿名 GET）为 auth.openai.com 下的 /api/accounts/authorize、/api/accounts/oauth/token、/.well-known/jwks.json、/api/accounts/oauth/revoke；未带授权。资源固定 api.openai.com/v1。当前 SDK 显式设置 max_retries=0、固定 URL、每次传独立 bearer，覆写默认 headers 避免 OPENAI_CUSTOM_HEADERS/org/project，关闭重定向；有界错误体与最终事件解析依赖锁定的 SDK 接口，升级必须重跑。仅推理 POST 使用 SDK，目录 GET 直接解析订阅 models[]，不套标准 data[].id。固定端点漂移时失败，不自动切 backend 或第三方。
+公开 discovery 仍在 auth.openai.com；资源固定 api.openai.com/v1。v0.1.1 使用同一 HTTPX 池直连官方 models 与 responses，不依赖 OpenAI Python SDK 或其私有 SSE 解码器。错误体与输入流仍有字节上限，只有合法 response.completed 才提交结果；无 SDK 自动重试，不接受环境中的 OpenAI 身份头。
 
-OAuth/目录/推理均按 Runner 进程的 HTTPS_PROXY、ALL_PROXY、NO_PROXY 选择传输，并验证 SSL_CERT_FILE/DIR 或 REQUESTS_CA_BUNDLE；不把 SDK 身份变量混入请求。OpenAI 暂锁 2.54.0：直接依赖私有 SSEDecoder 与请求钩子，升级必须先验证所有 SSE/错误回归。共享环境未核实，暂不宣称未测试版本兼容，也不在容器内升级。
+截图证实旧 v0.1.0 因 openai==2.54.0 与共享环境 3.55.1 冲突被拒。v0.1.1 完全移除该依赖。HTTPX、PyJWT、cryptography 分别声明 >=0.28.1,<0.29、>=2.15.1,<3、>=50.0.2,<51；开发/冷装仍使用精确锁。对无 openai 和已装 3.55.1 两种隔离环境各运行全量离线回归（均 152 passed）。不代表全范围逐版本实测。未改变目标容器的任何包。
 
 目标 data_dir、挂载、UID、依赖兼容性、回退次数仍未知。Unix 私有 mode 约束已编码，Windows 依实际用户 DACL；本轮双进程锁实测为 msvcrt，未实测 Linux flock/Docker volume。目标已有专用目录过宽时先设置为 0700。

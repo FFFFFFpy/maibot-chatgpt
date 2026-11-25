@@ -1,4 +1,4 @@
-"""Small adapter around the locked SDK. Keep limits on the raw SSE/error bytes."""
+"""HTTPX transport configuration and per-request diagnostic privacy."""
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -9,8 +9,6 @@ from urllib.request import getproxies_environment, proxy_bypass_environment
 import threading
 
 import httpx
-from openai import AsyncOpenAI
-from .oauth_constants import RESOURCE
 from .errors import Error
 
 _private = ContextVar("siwc_private_wire", default=False)
@@ -31,9 +29,6 @@ def private_wire():
     # httpcore creates these named loggers lazily (e.g. when TLS is negotiated).
     with _guard:
         for name in (
-            "openai._base_client",
-            "openai._client",
-            "openai",
             "httpx",
             "httpcore.connection",
             "httpcore.http11",
@@ -83,41 +78,3 @@ def network_client(factory, host, **options):
         # A proxy URL may contain a password. Do not propagate the original exception.
         pass
     raise Error("invalid_config")
-
-
-class DirectSDK(AsyncOpenAI):
-    @property
-    def default_headers(self):
-        # Never merge OPENAI_CUSTOM_HEADERS, organization or project into requests.
-        return {
-            "Accept": "text/event-stream",
-            "Accept-Encoding": "identity",
-            "Content-Type": "application/json",
-        }
-
-    async def _send_request(self, request, *, stream, **kwargs):
-        if str(request.url) != RESOURCE + "/responses" or request.method != "POST":
-            raise Error("route_mismatch")
-        r = await self._client.send(request, stream=True, follow_redirects=False)
-        if r.status_code == 200:
-            return r
-        # SDK reads error responses before raising: cap the bytes BEFORE handing them back.
-        buf = bytearray()
-        try:
-            async for chunk in r.aiter_bytes():
-                if len(buf) + len(chunk) > 32768:
-                    buf.clear()
-                    break
-                buf.extend(chunk)
-        finally:
-            await r.aclose()
-        return httpx.Response(
-            r.status_code,
-            content=bytes(buf),
-            headers={
-                k: v
-                for k, v in r.headers.items()
-                if k in ("retry-after", "x-request-id", "content-type")
-            },
-            request=request,
-        )

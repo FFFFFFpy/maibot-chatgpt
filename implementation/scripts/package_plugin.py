@@ -65,7 +65,7 @@ def build(output, preview, author, repo):
         raise ValueError("选择 --preview，或者同时提供真实作者主页与项目仓库 URL")
     output.mkdir(parents=True, exist_ok=True)
     destination = output / (
-        "maibot-chatgpt-provider-v0.1.0-web-login" + ("-preview" if preview else "") + ".zip"
+        "maibot-chatgpt-provider-v0.1.1-web-login" + ("-preview" if preview else "") + ".zip"
     )
     entries = {name: (ROOT / name).read_bytes() for name in FILES}
     manifest = json.loads(entries["_manifest.json"])

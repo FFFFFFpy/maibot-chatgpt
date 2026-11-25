@@ -1,8 +1,12 @@
-# MaiBot ChatGPT Subscription Provider · v0.1.0 开发预览
+# MaiBot ChatGPT Subscription Provider · v0.1.1 开发预览
 
 仅供自托管 MaiBot 通过**自己的** ChatGPT 订阅发起纯文本请求。插件注册 `maibot.chatgpt.subscription`，使用独立 SIWC 会话，不读取 Codex 或浏览器登录缓存，不使用 API key。只认完成的 Responses 终态。工具、图像、音频、Embedding、结构化输出不在 P0；跨供应商回退归 Host。
 
 **发布状态：已补齐作者主页与仓库地址，供隔离实例 G2 验证。** 没有在目标容器、真实账号或群聊中运行。不要覆盖生产安装。研究基线与边界见 [兼容报告](docs/compatibility-report.md)。
+
+## 从 v0.1.0 更新
+
+若旧插件报 `openai==2.54.0，当前安装 3.55.1`，请保留宿主现有 openai。v0.1.1 使用 HTTPX 直接请求官方 Responses API，不安装、导入或检查 OpenAI Python SDK。用新 ZIP 替换插件代码；管理器若提示同 ID 已安装，先备份专用数据目录，再按宿主流程移除旧插件代码并安装新版。不要删除插件数据卷，不要在共享 Runner 中安装本项目的精确开发锁。
 
 ## 从零开始
 

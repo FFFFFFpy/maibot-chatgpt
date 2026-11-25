@@ -4,8 +4,7 @@ import random
 import time
 from dataclasses import dataclass
 import httpx
-from openai import APIStatusError, OpenAIError
-from .wire import DirectSDK, private_wire, network_client
+from .wire import private_wire, network_client
 
 from .adapter import adapt
 from .errors import Error, classify
@@ -88,44 +87,29 @@ class Provider:
         started = False
         try:
             with private_wire():
-                if body is None:
-                    async with self.http.stream(
-                        method, RESOURCE + path, headers=headers
-                    ) as r:
-                        if r.status_code != 200:
-                            raise classify(
-                                r.status_code, await bounded_json(r, 32768), r.headers
-                            )
+                async with self.http.stream(
+                    method,
+                    RESOURCE + path,
+                    headers=headers,
+                    **({"json": body} if body is not None else {}),
+                ) as r:
+                    if r.status_code != 200:
+                        raise classify(
+                            r.status_code, await bounded_json(r, 32768), r.headers
+                        )
+                    if body is None:
                         return catalog(await bounded_json(r, 1048576))
-                # Per-call bearer avoids mutating a shared client during refresh. The HTTP pool belongs to Provider.
-                sdk = DirectSDK(
-                    api_key=token,
-                    admin_api_key="",
-                    organization="",
-                    project="",
-                    webhook_secret="",
-                    base_url=RESOURCE,
-                    max_retries=0,
-                    http_client=self.http,
-                    timeout=self.http.timeout,
-                )
-                async with sdk.responses.with_streaming_response.create(**body) as raw:
                     started = True
-                    r = raw.http_response
                     if (
-                        r.headers.get("content-type", "").split(";")[0].strip()
+                        r.headers.get("content-type", "")
+                        .partition(";")[0]
+                        .strip()
+                        .lower()
                         != "text/event-stream"
                     ):
                         raise Error("stream_failed")
                     return await consume(r, self.cfg.max_buffered_text_bytes)
-        except APIStatusError as exc:
-            error = classify(
-                exc.status_code,
-                await bounded_json(exc.response, 32768),
-                exc.response.headers,
-            )
         except (
-            OpenAIError,
             httpx.HTTPError,
             ValueError,
             TypeError,

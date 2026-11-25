@@ -1,6 +1,7 @@
-"""Bound bytes *before* the SDK's SSE decoder accumulates an event."""
+"""Decode the official Responses event stream without importing a host OpenAI SDK."""
 
-from openai._streaming import SSEDecoder
+import json
+import re
 
 from .errors import Error, classify
 from .oauth import text
@@ -78,17 +79,52 @@ async def limited(response, limit):
         yield chunk
 
 
-async def consume(response, limit):
-    decoder = SSEDecoder()
-    async for frame in decoder.aiter_bytes(limited(response, limit)):
-        if not frame.data:
+async def lines(response, limit):
+    # Split only SSE's CR, LF and CRLF, never Unicode separators inside JSON.
+    # Decode after a complete line so a split UTF-8 codepoint remains intact.
+    pending = bytearray()
+    after_cr = False
+    first = True
+    async for chunk in limited(response, limit):
+        if not chunk:
             continue
-        if frame.data == "[DONE]":
+        start = int(after_cr and chunk.startswith(b"\n"))
+        after_cr = chunk.endswith(b"\r")
+        for end in re.compile(rb"\r\n|[\r\n]").finditer(chunk, start):
+            pending.extend(chunk[start : end.start()])
+            yield pending.decode("utf-8-sig" if first else "utf-8")
+            first = False
+            pending.clear()
+            start = end.end()
+        pending.extend(chunk[start:])
+    # EOF without the terminating blank line must not commit a partial event.
+
+
+async def events(response, limit):
+    data = []
+    event = ""
+    async for line in lines(response, limit):
+        if not line:
+            if data:
+                yield event, "\n".join(data)
+            event, data = "", []
+            continue
+        field, _, value = line.partition(":")
+        value = value.removeprefix(" ")
+        if field == "event":
+            event = value
+        elif field == "data":
+            data.append(value)
+
+
+async def consume(response, limit):
+    async for event, payload in events(response, limit):
+        if payload == "[DONE]":
             break
-        data = frame.json()
+        data = json.loads(payload)
         check(isinstance(data, dict))
         typ = data.get("type")
-        check(isinstance(typ, str) and (not frame.event or frame.event == typ))
+        check(isinstance(typ, str) and (not event or event == typ))
         if typ == "response.completed":
             return completed(data.get("response"))
         if typ in ("response.failed", "error"):

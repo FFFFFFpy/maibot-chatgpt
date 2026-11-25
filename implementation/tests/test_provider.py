@@ -1,4 +1,4 @@
-"""All traffic and content are synthetic; exercise HTTPX plus the locked SDK decoder."""
+"""All traffic and content are synthetic; exercise HTTPX and bounded Responses SSE decoding."""
 
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -54,6 +54,29 @@ def response(parts=None, **kwargs):
 
 def final(**kw):
     return ev("response.completed", response=response(**kw))
+
+
+@pytest.mark.parametrize("ending", [b"\r", b"\n", b"\r\n"])
+def test_raw_sse_without_sdk(tmp_path, ending):
+    # Start with a split BOM and partition even multibyte characters/CRLF.
+    wire = b"\xef\xbb\xbf" + final().replace(b"\n", ending)
+
+    class Bytes(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for byte in wire:
+                yield bytes([byte])
+
+    def reply(_):
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, stream=Bytes()
+        )
+
+    assert run(engine(tmp_path, reply))["status"] == "completed"
+
+
+def test_no_blank_line_no_completed_event(tmp_path):
+    with pytest.raises(Error, match="stream_failed"):
+        run(engine(tmp_path, lambda _: sse(final().rstrip(b"\n") + b"\n")))
 
 
 def sse(raw):

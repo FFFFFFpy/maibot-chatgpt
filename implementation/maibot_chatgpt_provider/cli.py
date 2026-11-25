@@ -147,7 +147,6 @@ async def execute(a):
                     p: version(p)
                     for p in (
                         "maibot-plugin-sdk",
-                        "openai",
                         "httpx",
                         "cryptography",
                         "PyJWT",
